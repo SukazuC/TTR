@@ -70,15 +70,31 @@ try {
   Invoke-Expected $manifestsign @('verify', $public, $tampered, $signature) $false 'signature tamper rejection'
 
   $optionalOutput = Join-Path $resolvedScratch 'optional.json'
-  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'optional.yaml'),
+  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'optional.yaml'), 'xaml',
                                $optionalOutput) $true 'compatgen optional symbol'
-  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'ambiguous.yaml'),
+  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'ambiguous.yaml'), 'xaml',
                                (Join-Path $resolvedScratch 'ambiguous.json')) $false 'compatgen ambiguity rejection'
-  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'missing.yaml'),
+  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'missing.yaml'), 'xaml',
                                (Join-Path $resolvedScratch 'missing.json')) $false 'compatgen missing symbol rejection'
   Invoke-Expected $compatgen @($fixture, (Join-Path $Bin 'moduleid.pdb'),
-                               (Join-Path $Source 'optional.yaml'),
+                               (Join-Path $Source 'optional.yaml'), 'xaml',
                                (Join-Path $resolvedScratch 'mismatch.json')) $false 'compatgen PDB mismatch rejection'
+  $adjustmentOutput = Join-Path $resolvedScratch 'adjustment.json'
+  Invoke-Expected $compatgen @($fixture, $fixturePdb, (Join-Path $Source 'adjustment.yaml'),
+                               'classic', $adjustmentOutput) $true 'compatgen base adjustment'
+  $adjustment = Get-Content -Raw -LiteralPath $adjustmentOutput | ConvertFrom-Json
+  if ($adjustment.adjustments.Count -ne 1 -or $adjustment.adjustments[0].offset -ne 8 -or
+      $adjustment.adjustments[0].object_size -lt 16) {
+    throw 'compatgen base adjustment has unexpected bounds'
+  }
+  Invoke-Expected $compatgen @($fixture, $fixturePdb,
+                               (Join-Path $Source 'adjustment-missing.yaml'), 'classic',
+                               (Join-Path $resolvedScratch 'adjustment-missing.json')) $false `
+                               'compatgen missing adjustment rejection'
+  Invoke-Expected $compatgen @($fixture, $fixturePdb,
+                               (Join-Path $Source 'adjustment-ambiguous.yaml'), 'classic',
+                               (Join-Path $resolvedScratch 'adjustment-ambiguous.json')) $false `
+                               'compatgen ambiguous adjustment rejection'
 }
 finally {
   if (Test-Path -LiteralPath $resolvedScratch) {

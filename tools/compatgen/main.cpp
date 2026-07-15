@@ -40,7 +40,7 @@ private:
 };
 struct Spec
 {
-  std::string id, kind;
+  std::string id, kind, backend{"shared"}, derivedType, baseType;
   bool optional{};
   std::vector<std::string> names;
 };
@@ -112,6 +112,12 @@ bool ReadSpec(char const* path, std::string const& module, std::vector<Spec>& ou
       continue;
     if (text.rfind("kind:", 0) == 0)
       current.kind = Trim(text.substr(5));
+    else if (text.rfind("backend:", 0) == 0)
+      current.backend = Trim(text.substr(8));
+    else if (text.rfind("type:", 0) == 0)
+      current.derivedType = Trim(text.substr(5));
+    else if (text.rfind("base:", 0) == 0)
+      current.baseType = Trim(text.substr(5));
     else if (text.rfind("optional:", 0) == 0)
       current.optional = Trim(text.substr(9)) == "true";
     else if (text.rfind("names:", 0) == 0)
@@ -134,7 +140,10 @@ bool ReadSpec(char const* path, std::string const& module, std::vector<Spec>& ou
     return false;
   }
   for (auto const& s : out)
-    if (s.id.empty() || s.names.empty() || (s.kind != "function" && s.kind != "data"))
+    if (s.id.empty() || (s.backend != "shared" && s.backend != "classic" && s.backend != "xaml") ||
+        ((s.kind == "function" || s.kind == "data") && s.names.empty()) ||
+        (s.kind == "base_offset" && (s.derivedType.empty() || s.baseType.empty())) ||
+        (s.kind != "function" && s.kind != "data" && s.kind != "base_offset"))
     {
       error = "incomplete symbol specification entry";
       return false;
@@ -168,13 +177,89 @@ HRESULT CreateDiaSource(IDiaDataSource** source, HMODULE& module)
   module = nullptr;
   return hr;
 }
+
+std::wstring DiaName(IDiaSymbol* symbol)
+{
+  BSTR value{};
+  if (!symbol || FAILED(symbol->get_name(&value)) || !value)
+    return {};
+  std::wstring result(value, SysStringLen(value));
+  SysFreeString(value);
+  return result;
+}
+
+void CollectBaseOffsets(IDiaSymbol* type, const std::wstring& target, const std::uint64_t offset,
+                        const std::uint64_t objectSize, unsigned depth,
+                        std::set<std::pair<std::uint32_t, std::uint32_t>>& matches)
+{
+  if (!type || depth > 32 || offset > UINT32_MAX || objectSize > UINT32_MAX)
+    return;
+  Com<IDiaEnumSymbols> bases;
+  if (FAILED(type->findChildren(SymTagBaseClass, nullptr, nsNone, bases.put())) || !bases)
+    return;
+  for (;;)
+  {
+    IDiaSymbol* raw{};
+    ULONG fetched{};
+    if (bases->Next(1, &raw, &fetched) != S_OK || !fetched)
+      break;
+    Com<IDiaSymbol> base;
+    *base.put() = raw;
+    BOOL virtualBase{};
+    LONG baseOffset{};
+    Com<IDiaSymbol> baseType;
+    if (FAILED(base->get_virtualBaseClass(&virtualBase)) || virtualBase ||
+        FAILED(base->get_offset(&baseOffset)) || baseOffset < 0 ||
+        FAILED(base->get_type(baseType.put())) || !baseType)
+      continue;
+    const auto absolute = offset + static_cast<std::uint32_t>(baseOffset);
+    if (absolute > UINT32_MAX || absolute + sizeof(void*) > objectSize)
+      continue;
+    if (DiaName(baseType.operator->()) == target)
+      matches.emplace(static_cast<std::uint32_t>(absolute), static_cast<std::uint32_t>(objectSize));
+    CollectBaseOffsets(baseType.operator->(), target, absolute, objectSize, depth + 1, matches);
+  }
+}
+
+std::set<std::pair<std::uint32_t, std::uint32_t>> FindBaseOffsets(IDiaSymbol* global,
+                                                                  const std::wstring& derived,
+                                                                  const std::wstring& base)
+{
+  std::set<std::pair<std::uint32_t, std::uint32_t>> matches;
+  Com<IDiaEnumSymbols> types;
+  if (FAILED(global->findChildren(SymTagUDT, derived.c_str(), nsfCaseSensitive, types.put())) ||
+      !types)
+    return matches;
+  for (;;)
+  {
+    IDiaSymbol* raw{};
+    ULONG fetched{};
+    if (types->Next(1, &raw, &fetched) != S_OK || !fetched)
+      break;
+    Com<IDiaSymbol> type;
+    *type.put() = raw;
+    ULONGLONG objectSize{};
+    if (DiaName(type.operator->()) != derived || FAILED(type->get_length(&objectSize)) ||
+        objectSize < sizeof(void*) || objectSize > UINT32_MAX)
+      continue;
+    CollectBaseOffsets(type.operator->(), base, 0, objectSize, 0, matches);
+  }
+  return matches;
+}
 } // namespace
 
 int wmain(int argc, wchar_t** argv)
 {
-  if (argc != 5)
+  if (argc != 6)
   {
-    std::wcerr << L"usage: compatgen <module.dll> <module.pdb> <symbol-spec.yaml> <output.json>\n";
+    std::wcerr << L"usage: compatgen <module.dll> <module.pdb> <symbol-spec.yaml> "
+                  L"<classic|xaml> <output.json>\n";
+    return 2;
+  }
+  const auto backend = Narrow(argv[4]);
+  if (backend != "classic" && backend != "xaml")
+  {
+    std::cerr << "compatgen: backend must be classic or xaml\n";
     return 2;
   }
   ttr::PeIdentity image;
@@ -233,8 +318,37 @@ int wmain(int argc, wchar_t** argv)
                       {"pdb_guid", Narrow(ttr::GuidString(image.identity.pdbGuid))},
                       {"pdb_age", image.identity.pdbAge}};
   output["symbols"] = nlohmann::json::array();
+  output["adjustments"] = nlohmann::json::array();
   for (auto const& spec : specs)
   {
+    if (spec.backend != "shared" && spec.backend != backend)
+      continue;
+    if (spec.kind == "base_offset")
+    {
+      const auto matches =
+          FindBaseOffsets(global.operator->(), Wide(spec.derivedType), Wide(spec.baseType));
+      if (matches.size() != 1)
+      {
+        std::cerr << "compatgen: adjustment " << spec.id
+                  << (!matches.empty() ? " is ambiguous" : " was not found") << "\n";
+        CoUninitialize();
+        if (diaModule)
+          FreeLibrary(diaModule);
+        return 1;
+      }
+      const auto [offset, objectSize] = *matches.begin();
+      if (offset % alignof(void*) != 0 || offset > objectSize - sizeof(void*))
+      {
+        std::cerr << "compatgen: adjustment " << spec.id << " has invalid bounds or alignment\n";
+        CoUninitialize();
+        if (diaModule)
+          FreeLibrary(diaModule);
+        return 1;
+      }
+      output["adjustments"].push_back(
+          {{"id", spec.id}, {"offset", offset}, {"object_size", objectSize}, {"required", true}});
+      continue;
+    }
     std::set<DWORD> matches;
     for (auto const& candidate : spec.names)
     {
@@ -278,9 +392,26 @@ int wmain(int argc, wchar_t** argv)
       return 1;
     }
     output["symbols"].push_back(
-        {{"id", spec.id}, {"rva", foundRva}, {"kind", spec.kind}, {"required", !spec.optional}});
+        {{"id", spec.id}, {"rva", foundRva}, {"kind", spec.kind}, {"required", true}});
   }
-  std::ofstream file(std::filesystem::path(argv[4]), std::ios::binary | std::ios::trunc);
+  if (backend == "xaml" && _stricmp(moduleName.c_str(), "taskbar.dll") == 0)
+  {
+    const auto constructorCount = std::count_if(
+        output["symbols"].begin(), output["symbols"].end(), [](nlohmann::json const& symbol) {
+          const auto id = symbol.at("id").get<std::string>();
+          return id == "TaskItemThumbnail_ConstructorV1" || id == "TaskItemThumbnail_ConstructorV2";
+        });
+    if (constructorCount == 0)
+    {
+      std::cerr << "compatgen: no supported TaskItemThumbnail constructor was found\n";
+      CoUninitialize();
+      if (diaModule)
+        FreeLibrary(diaModule);
+      return 1;
+    }
+  }
+  output["backend"] = backend;
+  std::ofstream file(std::filesystem::path(argv[5]), std::ios::binary | std::ios::trunc);
   file << output.dump(2) << '\n';
   CoUninitialize();
   if (diaModule)

@@ -25,8 +25,7 @@ void Align(std::vector<std::byte>& v)
 std::map<std::string, ttr::SymbolId> Symbols()
 {
   using S = ttr::SymbolId;
-  return {{"TaskListWnd_Vtable_ITaskListUI", S::TaskListWnd_Vtable_ITaskListUI},
-          {"TaskListThumbnailWnd_GetHoverIndex", S::TaskListThumbnailWnd_GetHoverIndex},
+  return {{"TaskListThumbnailWnd_GetHoverIndex", S::TaskListThumbnailWnd_GetHoverIndex},
           {"TaskListThumbnailWnd_GetTaskItem", S::TaskListThumbnailWnd_GetTaskItem},
           {"TaskListThumbnailWnd_GetTaskGroup", S::TaskListThumbnailWnd_GetTaskGroup},
           {"TaskListThumbnailWnd_TaskReordered", S::TaskListThumbnailWnd_TaskReordered},
@@ -46,6 +45,10 @@ std::map<std::string, ttr::SymbolId> Symbols()
           {"HoverFlyoutModel_TargetItemKey", S::HoverFlyoutModel_TargetItemKey},
           {"TaskItemThumbnailList_OnPointerMoved", S::TaskItemThumbnailList_OnPointerMoved},
           {"FlyoutFrame_UpdateFlyoutPosition", S::FlyoutFrame_UpdateFlyoutPosition}};
+}
+std::map<std::string, ttr::AdjustmentId> Adjustments()
+{
+  return {{"TaskListWnd_ITaskListUI", ttr::AdjustmentId::TaskListWnd_ITaskListUI}};
 }
 bool Guid(const std::string& s, ttr::GuidBytes& out)
 {
@@ -73,13 +76,15 @@ int main(int argc, char** argv)
     input >> root;
     if (!root.contains("sequence") || !root.contains("records") || !root["records"].is_array())
       throw std::runtime_error("root requires sequence and records");
-    std::vector<ttr::ManifestRecordV1> records;
+    std::vector<ttr::ManifestRecordV2> records;
     std::vector<std::vector<ttr::ModuleIdentityV1>> allModules;
-    std::vector<std::vector<ttr::ManifestSymbolV1>> allSymbols;
+    std::vector<std::vector<ttr::ManifestSymbolV2>> allSymbols;
+    std::vector<std::vector<ttr::ManifestAdjustmentV2>> allAdjustments;
     auto known = Symbols();
+    auto knownAdjustments = Adjustments();
     for (const auto& r : root["records"])
     {
-      ttr::ManifestRecordV1 record{};
+      ttr::ManifestRecordV2 record{};
       record.recordId = r.at("id").get<std::uint64_t>();
       record.minimumProtocolVersion = 1;
       for (const auto& f : r.at("backend_flags"))
@@ -111,10 +116,10 @@ int main(int argc, char** argv)
           throw std::runtime_error("bad PDB GUID");
         modules.push_back(module);
       }
-      std::vector<ttr::ManifestSymbolV1> symbols;
+      std::vector<ttr::ManifestSymbolV2> symbols;
       for (const auto& s : r.at("symbols"))
       {
-        ttr::ManifestSymbolV1 symbol{};
+        ttr::ManifestSymbolV2 symbol{};
         auto found = known.find(s.at("id").get<std::string>());
         if (found == known.end())
           throw std::runtime_error("unknown symbol id");
@@ -131,14 +136,30 @@ int main(int argc, char** argv)
           throw std::runtime_error("unknown symbol kind");
         symbols.push_back(symbol);
       }
+      std::vector<ttr::ManifestAdjustmentV2> adjustments;
+      for (const auto& a : r.value("adjustments", json::array()))
+      {
+        ttr::ManifestAdjustmentV2 adjustment{};
+        auto found = knownAdjustments.find(a.at("id").get<std::string>());
+        if (found == knownAdjustments.end())
+          throw std::runtime_error("unknown adjustment id");
+        adjustment.adjustmentId = static_cast<std::uint16_t>(found->second);
+        adjustment.moduleIndex = a.at("module").get<std::uint8_t>();
+        adjustment.required = 1;
+        adjustment.offset = a.at("offset").get<std::uint32_t>();
+        adjustment.objectSize = a.at("object_size").get<std::uint32_t>();
+        adjustments.push_back(adjustment);
+      }
       record.moduleCount = static_cast<std::uint32_t>(modules.size());
       record.symbolCount = static_cast<std::uint32_t>(symbols.size());
+      record.adjustmentCount = static_cast<std::uint32_t>(adjustments.size());
       records.push_back(record);
       allModules.push_back(std::move(modules));
       allSymbols.push_back(std::move(symbols));
+      allAdjustments.push_back(std::move(adjustments));
     }
-    std::vector<std::byte> out(sizeof(ttr::ManifestHeaderV1) +
-                               records.size() * sizeof(ttr::ManifestRecordV1));
+    std::vector<std::byte> out(sizeof(ttr::ManifestHeaderV2) +
+                               records.size() * sizeof(ttr::ManifestRecordV2));
     Align(out);
     for (size_t i = 0; i < records.size(); ++i)
     {
@@ -150,8 +171,15 @@ int main(int argc, char** argv)
       for (auto& s : allSymbols[i])
         Append(out, s);
       Align(out);
+      if (!allAdjustments[i].empty())
+      {
+        records[i].adjustmentOffset = static_cast<std::uint32_t>(out.size());
+        for (auto& adjustment : allAdjustments[i])
+          Append(out, adjustment);
+        Align(out);
+      }
     }
-    auto* h = reinterpret_cast<ttr::ManifestHeaderV1*>(out.data());
+    auto* h = reinterpret_cast<ttr::ManifestHeaderV2*>(out.data());
     std::memcpy(h->magic, ttr::kManifestMagic, 8);
     h->formatVersion = ttr::kManifestVersion;
     h->headerSize = sizeof(*h);

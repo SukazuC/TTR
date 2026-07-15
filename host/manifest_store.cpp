@@ -44,8 +44,8 @@ bool EmbeddedPublicKey(std::span<const std::byte>& key) noexcept
 
 std::vector<std::byte> EmptyManifest()
 {
-  std::vector<std::byte> bytes(sizeof(ManifestHeaderV1));
-  auto* header = reinterpret_cast<ManifestHeaderV1*>(bytes.data());
+  std::vector<std::byte> bytes(sizeof(ManifestHeaderV2));
+  auto* header = reinterpret_cast<ManifestHeaderV2*>(bytes.data());
   std::memcpy(header->magic, kManifestMagic, sizeof(header->magic));
   header->formatVersion = kManifestVersion;
   header->headerSize = sizeof(*header);

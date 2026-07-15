@@ -164,7 +164,8 @@ bool EnableClassic(const Compatibility& c) noexcept
   reordered = reinterpret_cast<ReorderedFn>(get(SymbolId::TaskListThumbnailWnd_TaskReordered));
   void* wnd = get(SymbolId::TaskListThumbnailWnd_WndProc);
   void* filter = get(SymbolId::TaskItemFilter_IsTaskAllowed);
-  if (!hover || !item || !group || !reordered || !wnd || !filter || !ConfigureTaskModel(c))
+  if (!hover || !item || !group || !reordered || !wnd || !filter || !c.hasTaskListUiAdjustment ||
+      !ConfigureTaskModel(c))
     return false;
   HMODULE comctl = GetModuleHandleW(L"comctl32.dll");
   void* dpa = comctl ? reinterpret_cast<void*>(GetProcAddress(comctl, "DPA_GetPtr")) : nullptr;

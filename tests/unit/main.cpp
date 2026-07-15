@@ -18,8 +18,8 @@ void Check(bool value, const char* name)
 }
 std::vector<std::byte> Empty()
 {
-  std::vector<std::byte> b(sizeof(ttr::ManifestHeaderV1));
-  auto* h = reinterpret_cast<ttr::ManifestHeaderV1*>(b.data());
+  std::vector<std::byte> b(sizeof(ttr::ManifestHeaderV2));
+  auto* h = reinterpret_cast<ttr::ManifestHeaderV2*>(b.data());
   std::memcpy(h->magic, ttr::kManifestMagic, 8);
   h->formatVersion = ttr::kManifestVersion;
   h->headerSize = sizeof(*h);
@@ -37,13 +37,13 @@ int main()
   std::string error;
   Check(ttr::ParseManifest(good, view, error), "valid empty manifest");
   auto bad = good;
-  reinterpret_cast<ttr::ManifestHeaderV1*>(bad.data())->magic[0] = 'X';
+  reinterpret_cast<ttr::ManifestHeaderV2*>(bad.data())->magic[0] = 'X';
   Check(!ttr::ParseManifest(bad, view, error), "bad magic");
   bad = good;
-  reinterpret_cast<ttr::ManifestHeaderV1*>(bad.data())->totalSize++;
+  reinterpret_cast<ttr::ManifestHeaderV2*>(bad.data())->totalSize++;
   Check(!ttr::ParseManifest(bad, view, error), "bad total size");
   bad = good;
-  auto* h = reinterpret_cast<ttr::ManifestHeaderV1*>(bad.data());
+  auto* h = reinterpret_cast<ttr::ManifestHeaderV2*>(bad.data());
   h->recordCount = UINT32_MAX;
   Check(!ttr::ParseManifest(bad, view, error), "excessive record count");
   void *a = reinterpret_cast<void*>(1), *b = reinterpret_cast<void*>(2),

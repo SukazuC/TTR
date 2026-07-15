@@ -104,6 +104,22 @@ bool ResolveCompatibility(std::span<const std::byte> bytes, Compatibility& out) 
       }
       candidate.symbols[s.symbolId] = reinterpret_cast<std::byte*>(bases[s.moduleIndex]) + s.rva;
     }
+    for (const auto& adjustment : RecordAdjustments(view, r))
+    {
+      if (adjustment.adjustmentId !=
+              static_cast<std::uint16_t>(AdjustmentId::TaskListWnd_ITaskListUI) ||
+          adjustment.required != 1 || adjustment.moduleIndex >= modules.size() ||
+          adjustment.objectSize < sizeof(void*) || adjustment.objectSize > 1024 * 1024 ||
+          adjustment.offset % alignof(void*) != 0 ||
+          adjustment.offset > adjustment.objectSize - sizeof(void*))
+      {
+        match = false;
+        break;
+      }
+      candidate.hasTaskListUiAdjustment = true;
+      candidate.taskListUiOffset = adjustment.offset;
+      candidate.taskListObjectSize = adjustment.objectSize;
+    }
     if (match)
     {
       out = candidate;

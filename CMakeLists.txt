@@ -190,10 +190,16 @@ if(BUILD_TESTING)
   add_executable(ttr_crypto_tests tests/crypto/main.cpp)
   target_link_libraries(ttr_crypto_tests PRIVATE ttr_common)
   add_test(NAME crypto_signing_regressions COMMAND ttr_crypto_tests)
+  add_executable(ttr_context_tests tests/context/main.cpp)
+  target_include_directories(ttr_context_tests PRIVATE payload include)
+  target_link_libraries(ttr_context_tests PRIVATE ttr_build_options)
+  add_test(NAME thumbnail_context_regressions COMMAND ttr_context_tests)
   add_library(ttr_compat_fixture SHARED tests/tools/compat_fixture.cpp)
   target_link_libraries(ttr_compat_fixture PRIVATE ttr_build_options)
   # The compatibility fixture intentionally carries an RSDS identity in every
-  # configuration so compatgen can prove exact DLL/PDB matching in Release tests.
+  # configuration, including complete UDT/base information, so compatgen can
+  # prove exact DLL/PDB matching and DIA adjustment extraction in Release tests.
+  target_compile_options(ttr_compat_fixture PRIVATE /Zi /Od)
   target_link_options(ttr_compat_fixture PRIVATE /DEBUG:FULL)
   set_target_properties(ttr_compat_fixture PROPERTIES PREFIX "")
   add_test(NAME tool_end_to_end_regressions

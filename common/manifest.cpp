@@ -76,7 +76,7 @@ std::string IdentityKey(const ModuleIdentityV1& module)
   return key;
 }
 
-std::vector<std::string> ModuleSetKey(const ManifestView& view, const ManifestRecordV1& record)
+std::vector<std::string> ModuleSetKey(const ManifestView& view, const ManifestRecordV2& record)
 {
   std::vector<std::string> result;
   for (const auto& module : RecordModules(view, record))
@@ -100,12 +100,12 @@ bool ParseManifest(const std::span<const std::byte> bytes, ManifestView& out,
 {
   out = {};
   error.clear();
-  if (bytes.size() < sizeof(ManifestHeaderV1) || bytes.size() > kMaxManifestBytes)
+  if (bytes.size() < sizeof(ManifestHeaderV2) || bytes.size() > kMaxManifestBytes)
   {
     error = "manifest size is invalid";
     return false;
   }
-  const auto* header = reinterpret_cast<const ManifestHeaderV1*>(bytes.data());
+  const auto* header = reinterpret_cast<const ManifestHeaderV2*>(bytes.data());
   if (std::memcmp(header->magic, kManifestMagic, sizeof(kManifestMagic)) != 0)
   {
     error = "manifest magic is invalid";
@@ -122,19 +122,19 @@ bool ParseManifest(const std::span<const std::byte> bytes, ManifestView& out,
     error = "manifest header bounds are invalid";
     return false;
   }
-  if (header->recordCount > std::numeric_limits<std::size_t>::max() / sizeof(ManifestRecordV1))
+  if (header->recordCount > std::numeric_limits<std::size_t>::max() / sizeof(ManifestRecordV2))
   {
     error = "record table size overflows";
     return false;
   }
-  const auto recordBytes = static_cast<std::size_t>(header->recordCount) * sizeof(ManifestRecordV1);
+  const auto recordBytes = static_cast<std::size_t>(header->recordCount) * sizeof(ManifestRecordV2);
   if (!CheckedRange(header->recordTableOffset, recordBytes, bytes.size()))
   {
     error = "record table is out of bounds";
     return false;
   }
   const auto records =
-      SpanAt<ManifestRecordV1>(bytes, header->recordTableOffset, header->recordCount);
+      SpanAt<ManifestRecordV2>(bytes, header->recordTableOffset, header->recordCount);
   if (records.size() != header->recordCount)
   {
     error = "record table is out of bounds";
@@ -154,8 +154,12 @@ bool ParseManifest(const std::span<const std::byte> bytes, ManifestView& out,
     }
     if (!AddRange<ModuleIdentityV1>(record.moduleOffset, record.moduleCount, fixedEnd, bytes.size(),
                                     ranges, error) ||
-        (record.symbolCount && !AddRange<ManifestSymbolV1>(record.symbolOffset, record.symbolCount,
-                                                           fixedEnd, bytes.size(), ranges, error)))
+        (record.symbolCount &&
+         !AddRange<ManifestSymbolV2>(record.symbolOffset, record.symbolCount, fixedEnd,
+                                     bytes.size(), ranges, error)) ||
+        (record.adjustmentCount &&
+         !AddRange<ManifestAdjustmentV2>(record.adjustmentOffset, record.adjustmentCount, fixedEnd,
+                                         bytes.size(), ranges, error)))
     {
       return false;
     }
@@ -174,23 +178,29 @@ bool ParseManifest(const std::span<const std::byte> bytes, ManifestView& out,
 }
 
 std::span<const ModuleIdentityV1> RecordModules(const ManifestView& view,
-                                                const ManifestRecordV1& record) noexcept
+                                                const ManifestRecordV2& record) noexcept
 {
   return SpanAt<ModuleIdentityV1>(view.bytes, record.moduleOffset, record.moduleCount);
 }
 
-std::span<const ManifestSymbolV1> RecordSymbols(const ManifestView& view,
-                                                const ManifestRecordV1& record) noexcept
+std::span<const ManifestSymbolV2> RecordSymbols(const ManifestView& view,
+                                                const ManifestRecordV2& record) noexcept
 {
-  return SpanAt<ManifestSymbolV1>(view.bytes, record.symbolOffset, record.symbolCount);
+  return SpanAt<ManifestSymbolV2>(view.bytes, record.symbolOffset, record.symbolCount);
 }
 
-bool ValidateRecord(const ManifestView& view, const ManifestRecordV1& record,
+std::span<const ManifestAdjustmentV2> RecordAdjustments(const ManifestView& view,
+                                                        const ManifestRecordV2& record) noexcept
+{
+  return SpanAt<ManifestAdjustmentV2>(view.bytes, record.adjustmentOffset, record.adjustmentCount);
+}
+
+bool ValidateRecord(const ManifestView& view, const ManifestRecordV2& record,
                     std::string& error) noexcept
 {
   constexpr auto knownBackends = BackendClassic | BackendXaml | BackendAnimatedXaml;
   if (!record.recordId || record.minimumProtocolVersion != 1 || record.moduleCount == 0 ||
-      record.moduleCount > 16 || record.symbolCount > 128 ||
+      record.moduleCount > 16 || record.symbolCount > 128 || record.adjustmentCount > 8 ||
       !(record.backendFlags & (BackendClassic | BackendXaml)) ||
       (record.backendFlags & ~knownBackends) != 0)
   {
@@ -199,7 +209,9 @@ bool ValidateRecord(const ManifestView& view, const ManifestRecordV1& record,
   }
   const auto modules = RecordModules(view, record);
   const auto symbols = RecordSymbols(view, record);
-  if (modules.size() != record.moduleCount || symbols.size() != record.symbolCount)
+  const auto adjustments = RecordAdjustments(view, record);
+  if (modules.size() != record.moduleCount || symbols.size() != record.symbolCount ||
+      adjustments.size() != record.adjustmentCount)
   {
     error = "record data is out of bounds";
     return false;
@@ -237,7 +249,7 @@ bool ValidateRecord(const ManifestView& view, const ManifestRecordV1& record,
         symbol.rva >= modules[symbol.moduleIndex].sizeOfImage || !symbol.rva ||
         (symbol.kind != static_cast<std::uint8_t>(SymbolKind::Function) &&
          symbol.kind != static_cast<std::uint8_t>(SymbolKind::ReadOnlyData)) ||
-        symbol.required > 1 ||
+        symbol.required != 1 ||
         std::any_of(std::begin(symbol.reserved), std::end(symbol.reserved),
                     [](const std::uint8_t value) { return value != 0; }) ||
         !symbolIds.insert(symbol.symbolId).second)
@@ -249,17 +261,35 @@ bool ValidateRecord(const ManifestView& view, const ManifestRecordV1& record,
   const auto has = [&](const SymbolId id) {
     return symbolIds.contains(static_cast<std::uint16_t>(id));
   };
+  std::unordered_set<std::uint16_t> adjustmentIds;
+  for (const auto& adjustment : adjustments)
+  {
+    if (adjustment.adjustmentId == 0 ||
+        adjustment.adjustmentId > static_cast<std::uint16_t>(AdjustmentId::Last) ||
+        adjustment.moduleIndex >= modules.size() || adjustment.required != 1 ||
+        adjustment.objectSize < sizeof(void*) || adjustment.objectSize > 1024 * 1024 ||
+        adjustment.offset % alignof(void*) != 0 ||
+        adjustment.offset > adjustment.objectSize - sizeof(void*) ||
+        !adjustmentIds.insert(adjustment.adjustmentId).second)
+    {
+      error = "adjustment record is invalid";
+      return false;
+    }
+  }
+  const auto hasAdjustment = [&](const AdjustmentId id) {
+    return adjustmentIds.contains(static_cast<std::uint16_t>(id));
+  };
   const bool common =
-      has(SymbolId::TaskListWnd_Vtable_ITaskListUI) && has(SymbolId::TaskGroup_GetNumItems) &&
-      has(SymbolId::TaskListWnd_GetTBGroupFromGroup) && has(SymbolId::TaskBtnGroup_GetGroupType) &&
-      has(SymbolId::TaskBtnGroup_IndexOfTaskItem) &&
+      has(SymbolId::TaskGroup_GetNumItems) && has(SymbolId::TaskListWnd_GetTBGroupFromGroup) &&
+      has(SymbolId::TaskBtnGroup_GetGroupType) && has(SymbolId::TaskBtnGroup_IndexOfTaskItem) &&
       has(SymbolId::TaskListWnd_TaskInclusionChanged) &&
       has(SymbolId::TaskItemFilter_IsTaskAllowed);
   const bool classic = common && has(SymbolId::TaskListThumbnailWnd_GetHoverIndex) &&
                        has(SymbolId::TaskListThumbnailWnd_GetTaskItem) &&
                        has(SymbolId::TaskListThumbnailWnd_GetTaskGroup) &&
                        has(SymbolId::TaskListThumbnailWnd_TaskReordered) &&
-                       has(SymbolId::TaskListThumbnailWnd_WndProc);
+                       has(SymbolId::TaskListThumbnailWnd_WndProc) &&
+                       hasAdjustment(AdjustmentId::TaskListWnd_ITaskListUI);
   const bool xaml = common &&
                     (has(SymbolId::TaskItemThumbnail_ConstructorV1) ||
                      has(SymbolId::TaskItemThumbnail_ConstructorV2)) &&
@@ -277,6 +307,46 @@ bool ValidateRecord(const ManifestView& view, const ManifestRecordV1& record,
     error = "required backend symbol group is incomplete";
     return false;
   }
+  const auto sharedSymbol = [&](const SymbolId id) {
+    return id == SymbolId::TaskGroup_GetNumItems ||
+           id == SymbolId::TaskListWnd_GetTBGroupFromGroup ||
+           id == SymbolId::TaskBtnGroup_GetGroupType ||
+           id == SymbolId::TaskBtnGroup_IndexOfTaskItem ||
+           id == SymbolId::TaskListWnd_TaskInclusionChanged ||
+           id == SymbolId::TaskItemFilter_IsTaskAllowed;
+  };
+  const auto classicSymbol = [&](const SymbolId id) {
+    return id == SymbolId::TaskListThumbnailWnd_GetHoverIndex ||
+           id == SymbolId::TaskListThumbnailWnd_GetTaskItem ||
+           id == SymbolId::TaskListThumbnailWnd_GetTaskGroup ||
+           id == SymbolId::TaskListThumbnailWnd_TaskReordered ||
+           id == SymbolId::TaskListThumbnailWnd_WndProc;
+  };
+  const auto xamlSymbol = [&](const SymbolId id) {
+    return id == SymbolId::TaskItemThumbnail_ConstructorV1 ||
+           id == SymbolId::TaskItemThumbnail_ConstructorV2 ||
+           id == SymbolId::TaskGroup_Thumbnails || id == SymbolId::TaskItemThumbnailVector_Size ||
+           id == SymbolId::TaskItemThumbnailVector_GetAt ||
+           id == SymbolId::TaskListWnd_HandleExtendedUIClick ||
+           id == SymbolId::HoverFlyoutModel_TargetItemKey ||
+           id == SymbolId::TaskItemThumbnailList_OnPointerMoved ||
+           id == SymbolId::FlyoutFrame_UpdateFlyoutPosition;
+  };
+  for (const auto& symbol : symbols)
+  {
+    const auto id = static_cast<SymbolId>(symbol.symbolId);
+    if (!sharedSymbol(id) && (!classicSymbol(id) || !(record.backendFlags & BackendClassic)) &&
+        (!xamlSymbol(id) || !(record.backendFlags & BackendXaml)))
+    {
+      error = "record contains a symbol unused by its selected backends";
+      return false;
+    }
+  }
+  if (!adjustments.empty() && !(record.backendFlags & BackendClassic))
+  {
+    error = "record contains an adjustment unused by its selected backends";
+    return false;
+  }
   return true;
 }
 
@@ -288,12 +358,12 @@ bool ModuleIdentityEqual(const ModuleIdentityV1& left, const ModuleIdentityV1& r
          std::memcmp(left.pdbGuid.value, right.pdbGuid.value, sizeof(left.pdbGuid.value)) == 0;
 }
 
-const ManifestRecordV1* SelectExactRecord(const ManifestView& view,
+const ManifestRecordV2* SelectExactRecord(const ManifestView& view,
                                           const std::span<const ModuleIdentityV1> loaded,
                                           bool& ambiguous) noexcept
 {
   ambiguous = false;
-  const ManifestRecordV1* result = nullptr;
+  const ManifestRecordV2* result = nullptr;
   for (const auto& record : view.records)
   {
     const auto expected = RecordModules(view, record);

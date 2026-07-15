@@ -63,7 +63,7 @@ bool EnsureSession() noexcept
                         static_cast<std::uint64_t>(c->logOffset) + c->logSize <= c->manifestOffset;
   if (std::memcmp(c->magic, kSessionMagic, 8) || c->byteSize != sizeof(*c) ||
       c->protocolVersion != kProtocolVersion || c->explorerPid != GetCurrentProcessId() ||
-      !c->hostPid || !c->sessionNonce || c->manifestSize < sizeof(ManifestHeaderV1) ||
+      !c->hostPid || !c->sessionNonce || c->manifestSize < sizeof(ManifestHeaderV2) ||
       !c->logSize || !ranges || !separate)
   {
     reset();

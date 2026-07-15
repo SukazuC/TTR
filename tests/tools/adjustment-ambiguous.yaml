@@ -1,0 +1,8 @@
+version: 2
+modules:
+  ttr_compat_fixture.dll:
+    - id: TaskListWnd_ITaskListUI
+      kind: base_offset
+      backend: classic
+      type: TtrFixtureAmbiguous
+      base: TtrFixtureInterface

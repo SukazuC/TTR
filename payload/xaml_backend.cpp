@@ -4,6 +4,7 @@
 #include "payload_state.h"
 #include "seh_filter.h"
 #include "task_model.h"
+#include "thumbnail_context.h"
 #include "winrt_visual_tree.h"
 #include <Windows.h>
 #include <commctrl.h>
@@ -32,8 +33,7 @@ using namespace Windows::UI::Xaml;
 struct Mapping
 {
   weak_ref<Windows::Foundation::IInspectable> thumbnail;
-  void* taskGroup{};
-  void* taskItem{};
+  ThumbnailContext context;
   std::uint64_t order{};
 };
 std::vector<Mapping> mappings;
@@ -43,6 +43,7 @@ bool resolvingTarget{};
 std::atomic_bool reordered{};
 bool animated{};
 std::uint64_t mappingOrder{};
+std::uint64_t mappingGeneration{1};
 
 using Constructor1Fn = void*(WINAPI*)(void*, void*, void*, void*, void*, void*, void*, bool);
 using Constructor2Fn = void*(WINAPI*)(void*, void*, void*, void*, void*, void*, bool);
@@ -117,16 +118,20 @@ void Prune()
                        static_cast<std::ptrdiff_t>(mappings.size() - kMaximumThumbnailMappings));
   }
 }
-void AddMapping(Windows::Foundation::IInspectable const& thumbnail, void* group, void* item)
+void AddMapping(Windows::Foundation::IInspectable const& thumbnail, void* group, void* item,
+                void* taskListUi)
 {
+  if (!thumbnail || !group || !item || !taskListUi || !mappingGeneration)
+    return;
   std::erase_if(mappings, [&](auto const& m) {
     auto current = m.thumbnail.get();
-    return !current || current == thumbnail || (m.taskGroup == group && m.taskItem == item);
+    return !current || current == thumbnail ||
+           (m.context.taskGroup == group && m.context.taskItem == item);
   });
-  mappings.push_back({thumbnail, group, item, ++mappingOrder});
+  mappings.push_back({thumbnail, {group, item, taskListUi, mappingGeneration}, ++mappingOrder});
   Prune();
 }
-void CaptureConstructed(void* result, void* group, void* item)
+void CaptureConstructed(void* result, void* group, void* item, void* taskListUi)
 {
   if (!result)
     return;
@@ -134,7 +139,7 @@ void CaptureConstructed(void* result, void* group, void* item)
   auto* adjusted = reinterpret_cast<IUnknown*>(result) + 2;
   adjusted->QueryInterface(guid_of<Windows::Foundation::IInspectable>(), put_abi(object));
   if (object)
-    AddMapping(object, group, item);
+    AddMapping(object, group, item, taskListUi);
 }
 
 void* WINAPI Constructor1Hook(void* a, void* b, void* group, void* item, void* ui, void* f,
@@ -145,7 +150,7 @@ void* WINAPI Constructor1Hook(void* a, void* b, void* group, void* item, void* u
   if (GetState().enabled)
     try
     {
-      CaptureConstructed(result, group, item);
+      CaptureConstructed(result, group, item, ui);
     }
     catch (...)
     {
@@ -161,7 +166,7 @@ void* WINAPI Constructor2Hook(void* a, void* b, void* group, void* item, void* u
   if (GetState().enabled)
     try
     {
-      CaptureConstructed(result, group, item);
+      CaptureConstructed(result, group, item, ui);
     }
     catch (...)
     {
@@ -246,7 +251,8 @@ bool MoveXaml(int from, int to)
   com_ptr<IUnknown> fromObject, toObject;
   getAtOriginal(&raw, fromObject.put_void(), from);
   getAtOriginal(&raw, toObject.put_void(), to);
-  void *fromItem{}, *fromGroup{}, *toItem{}, *toGroup{};
+  ThumbnailContext fromContext{};
+  ThumbnailContext toContext{};
   for (auto const& m : mappings)
   {
     auto thumbnail = m.thumbnail.get();
@@ -254,19 +260,14 @@ bool MoveXaml(int from, int to)
       continue;
     auto* abi = get_abi(thumbnail);
     if (abi == fromObject.get())
-    {
-      fromItem = m.taskItem;
-      fromGroup = m.taskGroup;
-    }
+      fromContext = m.context;
     if (abi == toObject.get())
-    {
-      toItem = m.taskItem;
-      toGroup = m.taskGroup;
-    }
+      toContext = m.context;
   }
-  if (!fromItem || !toItem || fromGroup != toGroup)
+  if (!SameReorderContext(fromContext, toContext, mappingGeneration))
     return false;
-  return MoveTaskInGroup(fromGroup, fromItem, toItem);
+  return MoveTaskInGroup(fromContext.taskGroup, fromContext.taskItem, toContext.taskItem,
+                         fromContext.taskListUi);
 }
 
 int PointerLogic(void* self, void* rawArgs)
@@ -451,6 +452,10 @@ void DisableXaml() noexcept
 {
   hooks.Reset();
   mappings.clear();
+  ++mappingGeneration;
+  if (!mappingGeneration)
+    mappingGeneration = 1;
+  mappingOrder = 0;
   currentThumbnails = {};
   resolvingTarget = false;
   reordered = false;

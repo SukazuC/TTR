@@ -4,7 +4,7 @@
 namespace ttr::payload
 {
 bool ConfigureTaskModel(const Compatibility&) noexcept;
-bool MoveTaskInGroup(void*, void*, void*) noexcept;
+bool MoveTaskInGroup(void*, void*, void*, void* constructorTaskListUi = nullptr) noexcept;
 void SetFilterGate(bool) noexcept;
 bool FilterGate() noexcept;
 void CaptureDpa(void*) noexcept;
