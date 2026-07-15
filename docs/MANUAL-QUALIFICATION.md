@@ -10,6 +10,9 @@ which the payload may be loaded into Explorer. Do not begin until every entry cr
 - `TaskbarThumbnailReorder.exe --diagnose-offline` passes from the package directory.
 - The installed module identities exactly equal the identities in the candidate record.
 - `compatgen` verified each PDB GUID and age and every required symbol resolved uniquely.
+- Manifest version 2 contains a complete backend-specific dependency set. Classic records include an
+  exact DIA-derived `CTaskListWnd` to `ITaskListUI` adjustment; XAML records include at least one
+  constructor that provides `ITaskListUI` and do not carry unused classic requirements.
 - Every generated RVA was reviewed for the required executable or read-only section permission.
 - The record remains marked unqualified and has not been published or copied to the live application
   directory.
@@ -18,6 +21,17 @@ which the payload may be loaded into Explorer. Do not begin until every entry cr
   after static qualification.
 
 If any item is false, stop. Never substitute a nearby Windows build, PDB, or guessed RVA.
+
+`compatgen` is invoked separately for each exact module and selected backend:
+
+```text
+compatgen <module> <matching-pdb> <symbol-spec> <classic|xaml> <output-json>
+```
+
+It verifies the module/PDB CodeView identity before emitting anything. DIA base adjustments are written
+to the JSON `adjustments` array with their type size and are never represented as symbol RVAs. Missing,
+ambiguous, misaligned, or out-of-bounds results are fatal. Combine only the emitted exact-module
+fragments into a version 2 manifest input; every symbol and adjustment must name its module index.
 
 ## Controlled activation
 

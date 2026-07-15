@@ -154,6 +154,10 @@ std::vector<ModuleCheck> SystemModules()
   const auto taskbar = std::filesystem::path(windows) / L"System32" / L"taskbar.dll";
   if (std::filesystem::exists(taskbar))
     modules.push_back({taskbar.wstring()});
+  const auto taskbarView = std::filesystem::path(windows) / L"SystemApps" /
+                           L"MicrosoftWindows.Client.Core_cw5n1h2txyewy" / L"Taskbar.View.dll";
+  if (std::filesystem::exists(taskbarView))
+    modules.push_back({taskbarView.wstring()});
   for (auto& module : modules)
   {
     module.genericValid = InspectPeImage(module.path, module.image, module.error);
@@ -242,6 +246,8 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
   bool manifestValid = false;
   bool recordMatched = false;
   std::uint64_t recordId = 0;
+  std::uint32_t matchedBackendFlags = 0;
+  std::uint32_t matchedAdjustmentCount = 0;
   if (manifestRequested)
   {
     std::vector<std::byte> manifest;
@@ -274,6 +280,7 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
       {
         recordMatched = true;
         recordId = record->recordId;
+        matchedBackendFlags = record->backendFlags;
         const auto expected = RecordModules(view, *record);
         for (const auto& symbol : RecordSymbols(view, *record))
         {
@@ -288,6 +295,26 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
             recordMatched = false;
             error = "record contains an RVA with invalid range or section permissions";
             break;
+          }
+        }
+        if (recordMatched)
+        {
+          for (const auto& adjustment : RecordAdjustments(view, *record))
+          {
+            const bool valid =
+                adjustment.adjustmentId ==
+                    static_cast<std::uint16_t>(AdjustmentId::TaskListWnd_ITaskListUI) &&
+                adjustment.required == 1 && adjustment.moduleIndex < expected.size() &&
+                adjustment.objectSize >= sizeof(void*) && adjustment.objectSize <= 1024 * 1024 &&
+                adjustment.offset % alignof(void*) == 0 &&
+                adjustment.offset <= adjustment.objectSize - sizeof(void*);
+            if (!valid)
+            {
+              recordMatched = false;
+              error = "record contains an invalid typed adjustment";
+              break;
+            }
+            ++matchedAdjustmentCount;
           }
         }
       }
@@ -326,7 +353,9 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
     report << L"],\"manifest_requested\":" << (manifestRequested ? L"true" : L"false")
            << L",\"manifest_valid\":" << (manifestValid ? L"true" : L"false")
            << L",\"record_matched\":" << (recordMatched ? L"true" : L"false") << L",\"record_id\":"
-           << recordId << L",\"reasons\":[";
+           << recordId << L",\"backend_flags\":" << matchedBackendFlags << L",\"adjustment_count\":"
+           << matchedAdjustmentCount << L",\"compatibility_status\":\""
+           << (recordMatched ? L"supported" : L"unsupported") << L"\",\"reasons\":[";
     for (std::size_t index = 0; index < reasons.size(); ++index)
     {
       if (index)
@@ -363,7 +392,10 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
     if (manifestRequested)
     {
       report << L"Supplied manifest: " << (manifestValid ? L"signature valid" : L"invalid")
-             << L"\nExact record match: " << (recordMatched ? L"yes" : L"no") << L"\n";
+             << L"\nExact record match: " << (recordMatched ? L"yes" : L"no")
+             << L"\nBackend flags: " << matchedBackendFlags << L"\nTyped adjustments: "
+             << matchedAdjustmentCount << L"\nCompatibility: "
+             << (recordMatched ? L"SUPPORTED" : L"UNSUPPORTED") << L"\n";
     }
     for (const auto& reason : reasons)
       report << L"REJECT: " << reason << L"\n";

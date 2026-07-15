@@ -3,7 +3,7 @@
 1. Run `moduleid` against each installed taskbar module and retain its exact timestamp, image size,
    RSDS GUID, and age.
 2. Download a PDB only from Microsoft's public symbol service using that exact GUID/age key.
-3. Run `compatgen <module> <pdb> compat/symbol-spec.yaml <fragment.json>`. DIA rechecks GUID and age
+3. Run `compatgen <module> <pdb> compat/symbol-spec.yaml <classic|xaml> <fragment.json>`. DIA rechecks GUID and age
    before symbol enumeration. Missing, ambiguous, or wrong-permission required symbols stop generation.
 4. Store all dry-run output under `out/qualification/unqualified/`; never copy it to `%LOCALAPPDATA%`.
 5. Review stable symbol IDs, backend groups, RVA permissions, and module identity. Do not substitute a
