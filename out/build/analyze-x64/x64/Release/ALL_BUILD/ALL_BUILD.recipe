@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\x64\Release\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\x64\Release\mux_projection</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\TTRHook64.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\TaskbarThumbnailReorder.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\compatgen.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\manifestc.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\manifestsign.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\moduleid.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\Release\ttr_unit_tests.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\x64\Release\ALL_BUILD</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

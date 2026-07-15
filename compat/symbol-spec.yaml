@@ -1,0 +1,89 @@
+version: 1
+source: third_party/windhawk-reference/taskbar-thumbnail-reorder.wh.cpp
+modules:
+  taskbar.dll:
+    - id: TaskListWnd_Vtable_ITaskListUI
+      kind: data
+      names: ["const CTaskListWnd::`vftable'{for `ITaskListUI'}"]
+    - id: TaskListThumbnailWnd_GetHoverIndex
+      kind: function
+      optional: true
+      names: ["public: virtual int __cdecl CTaskListThumbnailWnd::GetHoverIndex(void)const "]
+    - id: TaskListThumbnailWnd_GetTaskItem
+      kind: function
+      optional: true
+      names: ["private: struct ITaskItem * __cdecl CTaskListThumbnailWnd::_GetTaskItem(int)const "]
+    - id: TaskListThumbnailWnd_GetTaskGroup
+      kind: function
+      optional: true
+      names: ["public: virtual struct ITaskGroup * __cdecl CTaskListThumbnailWnd::GetTaskGroup(void)const "]
+    - id: TaskListThumbnailWnd_TaskReordered
+      kind: function
+      optional: true
+      names: ["public: virtual void __cdecl CTaskListThumbnailWnd::TaskReordered(struct ITaskItem *)"]
+    - id: TaskListThumbnailWnd_WndProc
+      kind: function
+      optional: true
+      names: ["private: virtual __int64 __cdecl CTaskListThumbnailWnd::v_WndProc(struct HWND__ *,unsigned int,unsigned __int64,__int64)"]
+    - id: TaskGroup_GetNumItems
+      kind: function
+      names: ["public: virtual int __cdecl CTaskGroup::GetNumItems(void)"]
+    - id: TaskListWnd_GetTBGroupFromGroup
+      kind: function
+      names: ["protected: struct ITaskBtnGroup * __cdecl CTaskListWnd::_GetTBGroupFromGroup(struct ITaskGroup *,int *)"]
+    - id: TaskBtnGroup_GetGroupType
+      kind: function
+      names: ["public: virtual enum eTBGROUPTYPE __cdecl CTaskBtnGroup::GetGroupType(void)"]
+    - id: TaskBtnGroup_IndexOfTaskItem
+      kind: function
+      names: ["public: virtual int __cdecl CTaskBtnGroup::IndexOfTaskItem(struct ITaskItem *)"]
+    - id: TaskListWnd_TaskInclusionChanged
+      kind: function
+      names: ["public: virtual long __cdecl CTaskListWnd::TaskInclusionChanged(struct ITaskGroup *,struct ITaskItem *)"]
+    - id: TaskItemFilter_IsTaskAllowed
+      kind: function
+      names: ["public: virtual bool __cdecl TaskItemFilter::IsTaskAllowed(struct ITaskItem *)"]
+    - id: TaskItemThumbnail_ConstructorV1
+      kind: function
+      optional: true
+      names: ["public: __cdecl winrt::WindowsUdk::UI::Shell::implementation::TaskItemThumbnail::TaskItemThumbnail(struct winrt::WindowsUdk::UI::Shell::TaskItem const &,struct ITaskGroup *,struct ITaskItem *,struct ITaskListUI *,struct IWICImagingFactory *,struct ITaskListAcc *,bool)"]
+    - id: TaskItemThumbnail_ConstructorV2
+      kind: function
+      optional: true
+      names: ["public: __cdecl winrt::WindowsUdk::UI::Shell::implementation::TaskItemThumbnail::TaskItemThumbnail(struct winrt::WindowsUdk::UI::Shell::TaskItem const &,struct ITaskGroup *,struct ITaskItem *,struct ITaskListUI *,struct IWICImagingFactory *,bool)"]
+    - id: TaskGroup_Thumbnails
+      kind: function
+      optional: true
+      names: ["public: struct winrt::Windows::Foundation::Collections::IObservableVector<struct winrt::WindowsUdk::UI::Shell::TaskItemThumbnail> __cdecl winrt::WindowsUdk::UI::Shell::implementation::TaskGroup::Thumbnails(void)"]
+    - id: TaskItemThumbnailVector_Size
+      kind: function
+      optional: true
+      names: ["public: __cdecl winrt::impl::consume_Windows_Foundation_Collections_IVector<struct winrt::Windows::Foundation::Collections::IObservableVector<struct winrt::WindowsUdk::UI::Shell::TaskItemThumbnail>,struct winrt::WindowsUdk::UI::Shell::TaskItemThumbnail>::Size(void)const "]
+    - id: TaskItemThumbnailVector_GetAt
+      kind: function
+      optional: true
+      names: ["public: __cdecl winrt::impl::consume_Windows_Foundation_Collections_IVector<struct winrt::Windows::Foundation::Collections::IObservableVector<struct winrt::WindowsUdk::UI::Shell::TaskItemThumbnail>,struct winrt::WindowsUdk::UI::Shell::TaskItemThumbnail>::GetAt(unsigned int)const "]
+    - id: TaskListWnd_HandleExtendedUIClick
+      kind: function
+      optional: true
+      names: ["public: virtual long __cdecl CTaskListWnd::HandleExtendedUIClick(struct ITaskGroup *,struct ITaskItem *,struct winrt::Windows::System::LauncherOptions const &)"]
+  Taskbar.View.dll:
+    - id: HoverFlyoutModel_TargetItemKey
+      kind: function
+      names: ["private: void __cdecl winrt::Taskbar::implementation::HoverFlyoutModel::TargetItemKey(struct winrt::hstring const &)"]
+    - id: TaskItemThumbnailList_OnPointerMoved
+      kind: function
+      names: ["public: virtual int __cdecl winrt::impl::produce<struct winrt::Taskbar::implementation::TaskItemThumbnailList,struct winrt::Windows::UI::Xaml::Controls::IControlOverrides>::OnPointerMoved(void *)"]
+    - id: FlyoutFrame_UpdateFlyoutPosition
+      kind: function
+      names: ["private: void __cdecl winrt::Taskbar::implementation::FlyoutFrame::UpdateFlyoutPosition(void)"]
+  ExplorerExtensions.dll:
+    - id: HoverFlyoutModel_TargetItemKey
+      kind: function
+      names: ["private: void __cdecl winrt::Taskbar::implementation::HoverFlyoutModel::TargetItemKey(struct winrt::hstring const &)"]
+    - id: TaskItemThumbnailList_OnPointerMoved
+      kind: function
+      names: ["public: virtual int __cdecl winrt::impl::produce<struct winrt::Taskbar::implementation::TaskItemThumbnailList,struct winrt::Windows::UI::Xaml::Controls::IControlOverrides>::OnPointerMoved(void *)"]
+    - id: FlyoutFrame_UpdateFlyoutPosition
+      kind: function
+      names: ["private: void __cdecl winrt::Taskbar::implementation::FlyoutFrame::UpdateFlyoutPosition(void)"]

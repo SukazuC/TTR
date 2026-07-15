@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "TTRHook64.dir\\Debug\\winrt_visual_tree.obj",
+            "outputs": [
+                "C:\\Users\\lenovo\\Documents\\Projects\\TTR\\out\\build\\vs2022-x64\\TTRHook64.dir\\Debug\\vc143.pdb",
+                "TTRHook64.dir\\Debug\\"
+            ],
+            "requires": []
+        }
+    ]
+}

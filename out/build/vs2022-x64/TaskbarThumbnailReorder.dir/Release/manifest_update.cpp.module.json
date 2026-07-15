@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "TaskbarThumbnailReorder.dir\\Release\\manifest_update.obj",
+            "outputs": [
+                "TaskbarThumbnailReorder.dir\\Release\\"
+            ],
+            "requires": []
+        }
+    ]
+}

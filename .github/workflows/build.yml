@@ -1,0 +1,11 @@
+name: build
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B out -A x64 -DTTR_WARNINGS_AS_ERRORS=ON
+      - run: cmake --build out --config Debug --parallel
+      - run: ctest --test-dir out -C Debug --output-on-failure
+      - run: cmake --build out --config Release --parallel

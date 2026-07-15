@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "moduleid.dir\\Debug\\main.obj",
+            "outputs": [
+                "C:\\Users\\lenovo\\Documents\\Projects\\TTR\\out\\build\\vs2022-x64\\moduleid.dir\\Debug\\vc143.pdb",
+                "moduleid.dir\\Debug\\"
+            ],
+            "requires": []
+        }
+    ]
+}

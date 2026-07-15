@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "ttr_common.dir\\Release\\pe_identity.obj",
+            "outputs": [
+                "ttr_common.dir\\Release\\"
+            ],
+            "requires": []
+        }
+    ]
+}

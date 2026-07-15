@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\CMakeFiles\ed3071616529abee3192ccc995045d87\Continuous.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\lenovo\Documents\Projects\TTR\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\CMakeFiles\Continuous" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{53730ECD-B1CC-3804-ADE0-077F06EC071E}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

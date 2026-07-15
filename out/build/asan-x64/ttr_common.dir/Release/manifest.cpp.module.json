@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "ttr_common.dir\\Release\\manifest.obj",
+            "outputs": [
+                "C:\\Users\\lenovo\\Documents\\Projects\\TTR\\out\\build\\asan-x64\\Release\\ttr_common.pdb",
+                "ttr_common.dir\\Release\\"
+            ],
+            "requires": []
+        }
+    ]
+}

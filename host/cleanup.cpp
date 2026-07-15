@@ -1,0 +1,9 @@
+#include "cleanup.h"
+#include "autostart.h"
+#include <filesystem>
+#include <vector>
+
+namespace ttr::host {namespace{std::wstring Self(){std::vector<wchar_t>b(32768);DWORD n=GetModuleFileNameW(nullptr,b.data(),static_cast<DWORD>(b.size()));return{b.data(),n};}}
+bool LaunchCleanupHelper(DWORD pid,const std::wstring&directory,std::wstring&error)noexcept{wchar_t temp[MAX_PATH]{};if(!GetTempPathW(MAX_PATH,temp)){error=L"The temporary directory is unavailable.";return false;}auto helper=std::wstring(temp)+L"TaskbarThumbnailReorder-cleanup-"+std::to_wstring(pid)+L".exe";if(!CopyFileW(Self().c_str(),helper.c_str(),FALSE)){error=L"Unable to create the cleanup helper.";return false;}auto command=L"\""+helper+L"\" --cleanup-after "+std::to_wstring(pid)+L" \""+directory+L"\"";STARTUPINFOW startup{sizeof(startup)};PROCESS_INFORMATION process{};std::vector<wchar_t>mutableCommand(command.begin(),command.end());mutableCommand.push_back(L'\0');if(!CreateProcessW(helper.c_str(),mutableCommand.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&startup,&process)){DeleteFileW(helper.c_str());error=L"Unable to start the cleanup helper.";return false;}CloseHandle(process.hThread);CloseHandle(process.hProcess);return true;}
+int RunCleanupHelper(DWORD pid,const std::wstring&directory)noexcept{auto expected=ApplicationDataDirectory();std::error_code ec;auto actualPath=std::filesystem::weakly_canonical(directory,ec);auto expectedPath=std::filesystem::weakly_canonical(expected,ec);if(ec||_wcsicmp(actualPath.c_str(),expectedPath.c_str())!=0)return 2;HANDLE process=OpenProcess(SYNCHRONIZE,FALSE,pid);if(process){WaitForSingleObject(process,30000);CloseHandle(process);}RegDeleteTreeW(HKEY_CURRENT_USER,L"Software\\TaskbarThumbnailReorder");std::filesystem::remove_all(actualPath,ec);auto self=Self();if(!DeleteFileW(self.c_str()))MoveFileExW(self.c_str(),nullptr,MOVEFILE_DELAY_UNTIL_REBOOT);return ec?1:0;}
+}

@@ -1,0 +1,20 @@
+^C:\USERS\LENOVO\DOCUMENTS\PROJECTS\TTR\OUT\BUILD\VS2022-X64\CMAKEFILES\8774213A4E33F5E59D70C490FACBF20F\PAYLOAD.RC.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -DINPUT=C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/Debug/TTRHook64.dll -DOUTPUT=C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/generated/payload.rc -P C:/Users/lenovo/Documents/Projects/TTR/cmake/WritePayloadResource.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\LENOVO\DOCUMENTS\PROJECTS\TTR\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SC:/Users/lenovo/Documents/Projects/TTR -BC:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64 --check-stamp-file C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "TTRHook64.dir\\Release\\hook_transaction.obj",
+            "outputs": [
+                "TTRHook64.dir\\Release\\"
+            ],
+            "requires": []
+        }
+    ]
+}

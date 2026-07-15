@@ -1,0 +1,6 @@
+#pragma once
+#define TTR_VERSION_W L"@PROJECT_VERSION@"
+#define TTR_VERSION_A "@PROJECT_VERSION@"
+#ifndef TTR_MANIFEST_URL_W
+#define TTR_MANIFEST_URL_W L""
+#endif

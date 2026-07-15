@@ -1,0 +1,32 @@
+^C:\USERS\LENOVO\DOCUMENTS\PROJECTS\TTR\OUT\BUILD\VS2022-X64\CMAKEFILES\E20D97F536DAAA986EAF9F07D4661B06\PROJECTION.STAMP.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E make_directory C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/generated/mux
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\cppwinrt.exe" -input C:/Users/lenovo/Documents/Projects/TTR/third_party/microsoft-ui-xaml/Microsoft.UI.Xaml.winmd -input C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/_deps/microsoft.web.webview2.1.0.2849.39/lib/Microsoft.Web.WebView2.Core.winmd -reference 10.0.26100.0 -output C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/generated/mux -overwrite
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E touch C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/generated/mux/projection.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\LENOVO\DOCUMENTS\PROJECTS\TTR\OUT\BUILD\VS2022-X64\CMAKEFILES\8740E40F8684D4D4F17CC375BC102EE4\MUX_PROJECTION.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\LENOVO\DOCUMENTS\PROJECTS\TTR\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SC:/Users/lenovo/Documents/Projects/TTR -BC:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64 --check-stamp-file C:/Users/lenovo/Documents/Projects/TTR/out/build/vs2022-x64/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

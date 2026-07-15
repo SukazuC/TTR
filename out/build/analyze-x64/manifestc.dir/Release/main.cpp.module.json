@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "manifestc.dir\\Release\\main.obj",
+            "outputs": [
+                "manifestc.dir\\Release\\"
+            ],
+            "requires": []
+        }
+    ]
+}

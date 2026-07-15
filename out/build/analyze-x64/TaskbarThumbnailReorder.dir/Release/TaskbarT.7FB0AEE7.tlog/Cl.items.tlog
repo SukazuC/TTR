@@ -1,0 +1,11 @@
+C:\Users\lenovo\Documents\Projects\TTR\host\main.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\main.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\app.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\app.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\tray_icon.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\tray_icon.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\explorer_session.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\explorer_session.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\hook_loader.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\hook_loader.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\manifest_store.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\manifest_store.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\manifest_update.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\manifest_update.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\autostart.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\autostart.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\settings.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\settings.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\diagnostics.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\diagnostics.obj
+C:\Users\lenovo\Documents\Projects\TTR\host\cleanup.cpp;C:\Users\lenovo\Documents\Projects\TTR\out\build\analyze-x64\TaskbarThumbnailReorder.dir\Release\cleanup.obj
