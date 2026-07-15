@@ -1,3 +1,57 @@
 #include "hook_transaction.h"
 #include <MinHook.h>
-namespace ttr::payload {namespace{LONG users{};}bool HookTransaction::Begin()noexcept{Reset();auto status=MH_Initialize();initialized_=status==MH_OK||status==MH_ERROR_ALREADY_INITIALIZED;if(initialized_)InterlockedIncrement(&users);return initialized_;}bool HookTransaction::Add(void*t,void*d,void**o)noexcept{if(!initialized_||MH_CreateHook(t,d,o)!=MH_OK){Reset();return false;}targets_.push_back(t);return true;}bool HookTransaction::Commit()noexcept{if(!initialized_)return false;for(auto t:targets_)if(MH_QueueEnableHook(t)!=MH_OK){Reset();return false;}if(MH_ApplyQueued()!=MH_OK){Reset();return false;}return true;}void HookTransaction::Reset()noexcept{if(initialized_){for(auto t:targets_)MH_RemoveHook(t);if(InterlockedDecrement(&users)==0)MH_Uninitialize();}targets_.clear();initialized_=false;} }
+namespace ttr::payload
+{
+namespace
+{
+LONG users{};
+}
+bool HookTransaction::Begin() noexcept
+{
+  Reset();
+  auto status = MH_Initialize();
+  initialized_ = status == MH_OK || status == MH_ERROR_ALREADY_INITIALIZED;
+  if (initialized_)
+    InterlockedIncrement(&users);
+  return initialized_;
+}
+bool HookTransaction::Add(void* t, void* d, void** o) noexcept
+{
+  if (!initialized_ || MH_CreateHook(t, d, o) != MH_OK)
+  {
+    Reset();
+    return false;
+  }
+  targets_.push_back(t);
+  return true;
+}
+bool HookTransaction::Commit() noexcept
+{
+  if (!initialized_)
+    return false;
+  for (auto t : targets_)
+    if (MH_QueueEnableHook(t) != MH_OK)
+    {
+      Reset();
+      return false;
+    }
+  if (MH_ApplyQueued() != MH_OK)
+  {
+    Reset();
+    return false;
+  }
+  return true;
+}
+void HookTransaction::Reset() noexcept
+{
+  if (initialized_)
+  {
+    for (auto t : targets_)
+      MH_RemoveHook(t);
+    if (InterlockedDecrement(&users) == 0)
+      MH_Uninitialize();
+  }
+  targets_.clear();
+  initialized_ = false;
+}
+} // namespace ttr::payload

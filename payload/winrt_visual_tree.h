@@ -1,2 +1,5 @@
 #pragma once
-namespace ttr::payload { constexpr unsigned kMaximumThumbnailMappings=256; }
+namespace ttr::payload
+{
+constexpr unsigned kMaximumThumbnailMappings = 256;
+}

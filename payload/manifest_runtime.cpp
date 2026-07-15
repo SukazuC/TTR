@@ -2,10 +2,114 @@
 #include <algorithm>
 #include <cstring>
 
-namespace ttr::payload {namespace {
-bool IdentityFromMemory(HMODULE module,const char*name,ModuleIdentityV1&out){if(!module)return false;auto*b=reinterpret_cast<const std::byte*>(module);auto*dos=reinterpret_cast<const IMAGE_DOS_HEADER*>(b);if(dos->e_magic!=IMAGE_DOS_SIGNATURE||dos->e_lfanew<0)return false;auto*nt=reinterpret_cast<const IMAGE_NT_HEADERS64*>(b+dos->e_lfanew);if(nt->Signature!=IMAGE_NT_SIGNATURE||nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return false;strncpy_s(out.baseName,name,_TRUNCATE);out.timeDateStamp=nt->FileHeader.TimeDateStamp;out.sizeOfImage=nt->OptionalHeader.SizeOfImage;auto d=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG];if(!d.VirtualAddress||d.Size<sizeof(IMAGE_DEBUG_DIRECTORY)||d.VirtualAddress>=out.sizeOfImage||d.Size>out.sizeOfImage-d.VirtualAddress)return false;auto*entries=reinterpret_cast<const IMAGE_DEBUG_DIRECTORY*>(b+d.VirtualAddress);for(DWORD i=0;i<d.Size/sizeof(*entries);++i){if(entries[i].Type!=IMAGE_DEBUG_TYPE_CODEVIEW||entries[i].SizeOfData<24||entries[i].AddressOfRawData>=out.sizeOfImage||entries[i].SizeOfData>out.sizeOfImage-entries[i].AddressOfRawData)continue;auto*cv=b+entries[i].AddressOfRawData;if(std::memcmp(cv,"RSDS",4))continue;std::memcpy(out.pdbGuid.value,cv+4,16);std::memcpy(&out.pdbAge,cv+20,4);return true;}return false;}
-bool Same(const ModuleIdentityV1&a,const ModuleIdentityV1&b){return _stricmp(a.baseName,b.baseName)==0&&a.timeDateStamp==b.timeDateStamp&&a.sizeOfImage==b.sizeOfImage&&a.pdbAge==b.pdbAge&&std::memcmp(a.pdbGuid.value,b.pdbGuid.value,16)==0;}
-bool ValidRva(HMODULE module,std::uint32_t rva,SymbolKind kind){auto*b=reinterpret_cast<const std::byte*>(module);auto*dos=reinterpret_cast<const IMAGE_DOS_HEADER*>(b);auto*nt=reinterpret_cast<const IMAGE_NT_HEADERS64*>(b+dos->e_lfanew);auto*section=IMAGE_FIRST_SECTION(nt);for(WORD i=0;i<nt->FileHeader.NumberOfSections;++i)if(rva>=section[i].VirtualAddress&&rva-section[i].VirtualAddress<section[i].Misc.VirtualSize){if(!(section[i].Characteristics&IMAGE_SCN_MEM_READ))return false;return kind==SymbolKind::Function?!!(section[i].Characteristics&IMAGE_SCN_MEM_EXECUTE):!(section[i].Characteristics&IMAGE_SCN_MEM_WRITE);}return false;}
+namespace ttr::payload
+{
+namespace
+{
+bool IdentityFromMemory(HMODULE module, const char* name, ModuleIdentityV1& out)
+{
+  if (!module)
+    return false;
+  auto* b = reinterpret_cast<const std::byte*>(module);
+  auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(b);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew < 0)
+    return false;
+  auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(b + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE ||
+      nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+    return false;
+  strncpy_s(out.baseName, name, _TRUNCATE);
+  out.timeDateStamp = nt->FileHeader.TimeDateStamp;
+  out.sizeOfImage = nt->OptionalHeader.SizeOfImage;
+  auto d = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG];
+  if (!d.VirtualAddress || d.Size < sizeof(IMAGE_DEBUG_DIRECTORY) ||
+      d.VirtualAddress >= out.sizeOfImage || d.Size > out.sizeOfImage - d.VirtualAddress)
+    return false;
+  auto* entries = reinterpret_cast<const IMAGE_DEBUG_DIRECTORY*>(b + d.VirtualAddress);
+  for (DWORD i = 0; i < d.Size / sizeof(*entries); ++i)
+  {
+    if (entries[i].Type != IMAGE_DEBUG_TYPE_CODEVIEW || entries[i].SizeOfData < 24 ||
+        entries[i].AddressOfRawData >= out.sizeOfImage ||
+        entries[i].SizeOfData > out.sizeOfImage - entries[i].AddressOfRawData)
+      continue;
+    auto* cv = b + entries[i].AddressOfRawData;
+    if (std::memcmp(cv, "RSDS", 4))
+      continue;
+    std::memcpy(out.pdbGuid.value, cv + 4, 16);
+    std::memcpy(&out.pdbAge, cv + 20, 4);
+    return true;
+  }
+  return false;
 }
-bool ResolveCompatibility(std::span<const std::byte>bytes,Compatibility&out)noexcept{out={};ManifestView view;std::string error;if(!ParseManifest(bytes,view,error))return false;for(const auto&r:view.records){auto modules=RecordModules(view,r);std::array<HMODULE,16>bases{};bool match=true;for(size_t i=0;i<modules.size();++i){wchar_t wide[40]{};MultiByteToWideChar(CP_UTF8,0,modules[i].baseName,-1,wide,40);bases[i]=GetModuleHandleW(wide);ModuleIdentityV1 actual{};if(!IdentityFromMemory(bases[i],modules[i].baseName,actual)||!Same(actual,modules[i])){match=false;break;}}if(!match)continue;Compatibility candidate{};candidate.recordId=r.recordId;candidate.backendFlags=r.backendFlags;for(const auto&s:RecordSymbols(view,r)){auto kind=static_cast<SymbolKind>(s.kind);if(!ValidRva(bases[s.moduleIndex],s.rva,kind)){match=false;break;}candidate.symbols[s.symbolId]=reinterpret_cast<std::byte*>(bases[s.moduleIndex])+s.rva;}if(match){out=candidate;return true;}}return false;}
+bool Same(const ModuleIdentityV1& a, const ModuleIdentityV1& b)
+{
+  return _stricmp(a.baseName, b.baseName) == 0 && a.timeDateStamp == b.timeDateStamp &&
+         a.sizeOfImage == b.sizeOfImage && a.pdbAge == b.pdbAge &&
+         std::memcmp(a.pdbGuid.value, b.pdbGuid.value, 16) == 0;
 }
+bool ValidRva(HMODULE module, std::uint32_t rva, SymbolKind kind)
+{
+  auto* b = reinterpret_cast<const std::byte*>(module);
+  auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(b);
+  auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(b + dos->e_lfanew);
+  auto* section = IMAGE_FIRST_SECTION(nt);
+  for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i)
+    if (rva >= section[i].VirtualAddress &&
+        rva - section[i].VirtualAddress < section[i].Misc.VirtualSize)
+    {
+      if (!(section[i].Characteristics & IMAGE_SCN_MEM_READ))
+        return false;
+      return kind == SymbolKind::Function ? !!(section[i].Characteristics & IMAGE_SCN_MEM_EXECUTE)
+                                          : !(section[i].Characteristics & IMAGE_SCN_MEM_WRITE);
+    }
+  return false;
+}
+} // namespace
+bool ResolveCompatibility(std::span<const std::byte> bytes, Compatibility& out) noexcept
+{
+  out = {};
+  ManifestView view;
+  std::string error;
+  if (!ParseManifest(bytes, view, error))
+    return false;
+  for (const auto& r : view.records)
+  {
+    auto modules = RecordModules(view, r);
+    std::array<HMODULE, 16> bases{};
+    bool match = true;
+    for (size_t i = 0; i < modules.size(); ++i)
+    {
+      wchar_t wide[40]{};
+      MultiByteToWideChar(CP_UTF8, 0, modules[i].baseName, -1, wide, 40);
+      bases[i] = GetModuleHandleW(wide);
+      ModuleIdentityV1 actual{};
+      if (!IdentityFromMemory(bases[i], modules[i].baseName, actual) || !Same(actual, modules[i]))
+      {
+        match = false;
+        break;
+      }
+    }
+    if (!match)
+      continue;
+    Compatibility candidate{};
+    candidate.recordId = r.recordId;
+    candidate.backendFlags = r.backendFlags;
+    for (const auto& s : RecordSymbols(view, r))
+    {
+      auto kind = static_cast<SymbolKind>(s.kind);
+      if (!ValidRva(bases[s.moduleIndex], s.rva, kind))
+      {
+        match = false;
+        break;
+      }
+      candidate.symbols[s.symbolId] = reinterpret_cast<std::byte*>(bases[s.moduleIndex]) + s.rva;
+    }
+    if (match)
+    {
+      out = candidate;
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace ttr::payload

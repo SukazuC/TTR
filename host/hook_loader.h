@@ -5,17 +5,27 @@
 #include <span>
 #include <string>
 
-namespace ttr::host {
-class HookLoader {
- public:
+namespace ttr::host
+{
+class HookLoader
+{
+public:
   ~HookLoader();
   bool Attach(const ExplorerInfo&, std::span<const std::byte>, std::wstring&) noexcept;
   bool CommandAndWait(Command, LONG, DWORD, std::wstring&) noexcept;
   bool Detach() noexcept;
   PayloadState state() const noexcept;
- private:
+
+private:
   bool ExtractPayload(std::wstring&, std::wstring&) noexcept;
-  HMODULE localModule_{}; HHOOK hook_{}; HANDLE mapping_{}; void* mappingView_{};
-  TtrSessionControlV1* control_{}; HWND taskbar_{}; DWORD threadId_{};DWORD explorerPid_{}; std::wstring payloadPath_;
+  HMODULE localModule_{};
+  HHOOK hook_{};
+  HANDLE mapping_{};
+  void* mappingView_{};
+  TtrSessionControlV1* control_{};
+  HWND taskbar_{};
+  DWORD threadId_{};
+  DWORD explorerPid_{};
+  std::wstring payloadPath_;
 };
-}
+} // namespace ttr::host
