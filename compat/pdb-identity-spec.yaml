@@ -1,0 +1,13 @@
+version: 1
+source: identity-verification-only
+modules:
+  explorer.exe:
+    - id: IdentityProbe
+      kind: function
+      optional: true
+      names: ["TaskbarThumbnailReorderIdentityProbeThatMustNotExist"]
+  taskbar.dll:
+    - id: IdentityProbe
+      kind: function
+      optional: true
+      names: ["TaskbarThumbnailReorderIdentityProbeThatMustNotExist"]
