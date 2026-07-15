@@ -1,0 +1,54 @@
+# CMake and build output
+/out/
+/build/
+/cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
+# Visual C++ output
+*.obj
+*.o
+*.lib
+*.exp
+*.ilk
+*.idb
+*.pch
+*.tlog
+*.lastbuildstate
+*.exe
+*.dll
+*.pdb
+*.ipdb
+*.iobj
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Local diagnostics and compatibility scratch data
+*diagnostics*.txt
+*.dmp
+*.etl
+compat.bin
+compat.sig
+*.sig
+*.manifest.tmp
+*.manifest.new
+/out/qualification/
+
+# Secrets: private keys are never source material
+*.private.blob
+*.private.key
+*.pem
+*.pfx
+*.p12
+/local-secrets/
+/secrets-local/
+
+# Editor and OS files
+.vs/
+.vscode/
+Thumbs.db
+.DS_Store
