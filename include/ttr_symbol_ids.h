@@ -1,8 +1,10 @@
 #pragma once
 #include <cstdint>
 
-namespace ttr {
-enum class SymbolId : std::uint16_t {
+namespace ttr
+{
+enum class SymbolId : std::uint16_t
+{
   Invalid = 0,
   TaskListWnd_Vtable_ITaskListUI = 1,
   TaskListThumbnailWnd_GetHoverIndex,
@@ -28,4 +30,4 @@ enum class SymbolId : std::uint16_t {
   Dpa_GetPtr,
   Last = Dpa_GetPtr
 };
-}
+} // namespace ttr
