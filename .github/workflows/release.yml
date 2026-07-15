@@ -1,14 +1,42 @@
 name: release-build
+
 on:
   workflow_dispatch:
+
 jobs:
-  release:
+  offline-release:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B out -A x64 -DTTR_WARNINGS_AS_ERRORS=ON
-      - run: cmake --build out --config Release --parallel
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Generate isolated release-build key
+        shell: pwsh
+        run: |
+          cmake -S . -B out/bootstrap -A x64 -DTTR_WARNINGS_AS_ERRORS=ON
+          cmake --build out/bootstrap --config Release --target manifestsign
+          New-Item -ItemType Directory -Force out/release-secrets | Out-Null
+          out/bootstrap/Release/manifestsign.exe generate `
+            out/release-secrets/manifest.private.blob out/release-secrets/manifest.public.blob
+      - name: Build and test Release
+        run: |
+          cmake -S . -B out/release -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/release-secrets/manifest.public.blob
+          cmake --build out/release --config Release --parallel
+          ctest --test-dir out/release -C Release --output-on-failure
+      - name: Package without private material
+        shell: pwsh
+        run: |
+          ./tools/package.ps1 `
+            -BuildDirectory out/release/Release `
+            -SourceDirectory . `
+            -OutputDirectory out/package `
+            -Dumpbin (Get-Command dumpbin.exe).Source `
+            -PrivateKey out/release-secrets/manifest.private.blob `
+            -KeyDescription 'ephemeral workflow key; replace with personal public key for use'
+          Remove-Item -LiteralPath out/release-secrets -Recurse -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: unsigned-release
-          path: out/Release/TaskbarThumbnailReorder.exe
+          name: unsigned-offline-release-candidate
+          path: out/package
+          if-no-files-found: error

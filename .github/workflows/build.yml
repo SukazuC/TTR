@@ -1,11 +1,51 @@
 name: build
-on: [push, pull_request]
+
+on:
+  push:
+  pull_request:
+
 jobs:
   windows:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B out -A x64 -DTTR_WARNINGS_AS_ERRORS=ON
-      - run: cmake --build out --config Debug --parallel
-      - run: ctest --test-dir out -C Debug --output-on-failure
-      - run: cmake --build out --config Release --parallel
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Configure x64 with warnings as errors
+        run: cmake -S . -B out/build/ci -A x64 -DTTR_WARNINGS_AS_ERRORS=ON
+      - name: Build and test Debug
+        run: |
+          cmake --build out/build/ci --config Debug --parallel
+          ctest --test-dir out/build/ci -C Debug --output-on-failure
+      - name: Build and test fail-closed Release
+        run: |
+          cmake --build out/build/ci --config Release --parallel
+          ctest --test-dir out/build/ci -C Release --output-on-failure
+      - name: Create ephemeral CI signing identity
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/ci-secrets | Out-Null
+          out/build/ci/Release/manifestsign.exe generate `
+            out/ci-secrets/manifest.private.blob out/ci-secrets/manifest.public.blob
+      - name: Build and test personalized Release
+        run: |
+          cmake -S . -B out/build/ci-package -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/ci-secrets/manifest.public.blob
+          cmake --build out/build/ci-package --config Release --parallel
+          ctest --test-dir out/build/ci-package -C Release --output-on-failure
+      - name: Construct and verify deterministic package
+        shell: pwsh
+        run: |
+          ./tools/package.ps1 `
+            -BuildDirectory out/build/ci-package/Release `
+            -SourceDirectory . `
+            -OutputDirectory out/package `
+            -Dumpbin (Get-Command dumpbin.exe).Source `
+            -PrivateKey out/ci-secrets/manifest.private.blob `
+            -KeyDescription 'ephemeral CI development key; not for compatibility publication'
+          Remove-Item -LiteralPath out/ci-secrets -Recurse -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-qualified-package
+          path: out/package
+          if-no-files-found: error
