@@ -65,3 +65,10 @@ Disable the feature and exit the host. A record may be changed from `unqualified
 all behavior, restart, stress, and resource observations pass on the exact module identities. Any
 Explorer crash, stale capture, wrong activation, array divergence, leak trend, missing symbol, or
 identity change invalidates the record and blocks publication.
+
+## Completed qualification
+
+Record `2620013101` completed the focused procedure on July 16, 2026. The agent observed Active state,
+the expected Explorer payload, responsiveness, and clean detach; the user performed the thumbnail drag
+and confirmed that the visible order changed. The exact evidence and its deliberately limited scope are
+recorded in [`docs/qualification/2620013101.md`](qualification/2620013101.md).

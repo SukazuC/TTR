@@ -1,8 +1,9 @@
 # Testing
 
 Automated tests never load the payload into Explorer. They cover generic and strict PE parsing,
-malformed headers and CodeView records, RVA permissions, manifest bounds/overlap/selection, ECDSA key
-and tamper cases, deterministic tools, DIA identity and symbol failures, and the offline diagnostic.
+malformed headers and CodeView records, RVA permissions, manifest bounds/overlap/selection, embedded
+baseline signatures and newer-only overrides, ECDSA key and tamper cases, deterministic tools, DIA
+identity and symbol failures, the non-injecting host-window startup path, and the offline diagnostic.
 
 ```powershell
 cmake --preset vs2022-x64

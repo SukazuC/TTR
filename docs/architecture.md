@@ -47,3 +47,12 @@ The following alternatives are deliberately rejected: scanning a vtable, copying
 build, storing a base adjustment as a synthetic symbol RVA, deriving offsets from instruction patterns,
 making a required dependency optional, or retaining constructor interfaces with ownership beyond the
 thumbnail mapping generation.
+
+## Embedded compatibility baseline
+
+The portable EXE embeds three separate read-only resources: payload 101, public verification key 102,
+qualified manifest 103, and manifest signature 104. The host verifies the embedded ECDSA signature and
+parses the manifest before using it. External `compat.bin`/`compat.sig` files are considered only when
+validly signed by the same key and carrying a sequence strictly newer than the embedded baseline;
+invalid, equal, or older pairs cannot replace it. Exact module and RVA checks remain unchanged after
+selection. The private signing key is never a build input or resource.
