@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory = $true)][string]$HostExe,
   [Parameter(Mandatory = $true)][int]$DevelopmentKey,
+  [Parameter(Mandatory = $true)][int]$EmbeddedBaseline,
   [Parameter(Mandatory = $true)][string]$Scratch
 )
 
@@ -16,9 +17,9 @@ $stderr = Join-Path $scratchPath 'stderr.txt'
 try {
   $process = Start-Process -FilePath $HostExe -ArgumentList @('--diagnose-offline', '--json') `
     -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-  $expectedExit = if ($DevelopmentKey) { 4 } else { 0 }
-  if ($process.ExitCode -ne $expectedExit) {
-    throw "offline diagnostic exit $($process.ExitCode), expected $expectedExit"
+  $expectedExits = if ($DevelopmentKey) { @(4) } else { @(0, 6) }
+  if ($process.ExitCode -notin $expectedExits) {
+    throw "offline diagnostic exit $($process.ExitCode), expected one of $expectedExits"
   }
   $report = Get-Content -Raw -LiteralPath $stdout | ConvertFrom-Json
   if ($report.live_integration -ne $false -or $report.payload_valid -ne $true -or
@@ -30,6 +31,21 @@ try {
   }
   if (-not $DevelopmentKey -and $report.public_key_valid -ne $true) {
     throw 'personalized public key did not validate'
+  }
+  if ($EmbeddedBaseline) {
+    if ($report.embedded_manifest_present -ne $true -or
+        $report.embedded_manifest_signature_valid -ne $true -or
+        $report.manifest_valid -ne $true -or $report.external_manifest_requested -ne $false -or
+        $report.external_manifest_selected -ne $false -or $report.manifest_source -ne 'embedded') {
+      throw 'embedded baseline did not validate independently of external compatibility files'
+    }
+  }
+  elseif ($report.embedded_manifest_present -ne $false) {
+    throw 'explicit empty-baseline build unexpectedly embedded compatibility data'
+  }
+  if ($process.ExitCode -eq 0 -and
+      ($report.compatibility_status -ne 'supported' -or $report.record_matched -ne $true)) {
+    throw 'successful offline diagnostic did not report exact supported compatibility'
   }
 }
 finally {

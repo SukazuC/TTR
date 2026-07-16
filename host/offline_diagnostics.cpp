@@ -1,6 +1,7 @@
 #include "offline_diagnostics.h"
 
 #include "crypto.h"
+#include "manifest_selection.h"
 #include "pe_identity.h"
 #include "sha256.h"
 #include "ttr_manifest.h"
@@ -9,6 +10,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -22,6 +24,8 @@ namespace
 
 constexpr int kPayloadResource = 101;
 constexpr int kPublicKeyResource = 102;
+constexpr int kBaselineManifestResource = 103;
+constexpr int kBaselineSignatureResource = 104;
 
 bool ReadBounded(const std::wstring& path, const std::size_t limit, std::vector<std::byte>& bytes,
                  std::string& error)
@@ -242,91 +246,101 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
     }
   }
 
-  bool manifestRequested = !manifestPath.empty();
+  const bool manifestRequested = !manifestPath.empty();
+  std::span<const std::byte> embeddedManifest, embeddedSignature;
+  std::string embeddedManifestError, embeddedSignatureError;
+  const bool embeddedManifestResource =
+      ResourceBytes(kBaselineManifestResource, embeddedManifest, embeddedManifestError);
+  const bool embeddedSignatureResource =
+      ResourceBytes(kBaselineSignatureResource, embeddedSignature, embeddedSignatureError);
+  const bool embeddedPresent = embeddedManifestResource || embeddedSignatureResource;
+  bool embeddedSignatureValid = false;
+  bool externalSelected = false;
   bool manifestValid = false;
   bool recordMatched = false;
   std::uint64_t recordId = 0;
   std::uint32_t matchedBackendFlags = 0;
   std::uint32_t matchedAdjustmentCount = 0;
+  std::vector<std::byte> externalManifest, externalSignature;
+  std::array<SignedManifestPair, 1> externalPairs{};
   if (manifestRequested)
   {
-    std::vector<std::byte> manifest;
-    std::vector<std::byte> signature;
-    ManifestView view;
     error.clear();
-    manifestValid = ReadBounded(manifestPath, kMaxManifestBytes, manifest, error) &&
-                    ReadBounded(signaturePath, 256, signature, error) && keyValid &&
-                    VerifyEcdsaP256(publicKey, manifest, signature, error) &&
-                    ParseManifest(manifest, view, error);
-    if (manifestValid)
+    if (ReadBounded(manifestPath, kMaxManifestBytes, externalManifest, error) &&
+        ReadBounded(signaturePath, 256, externalSignature, error))
+      externalPairs[0] = {externalManifest, externalSignature};
+  }
+  ManifestSelectionResult selection;
+  ManifestView view;
+  const auto external = manifestRequested ? std::span<const SignedManifestPair>(externalPairs)
+                                          : std::span<const SignedManifestPair>();
+  manifestValid = keyValid && embeddedManifestResource == embeddedSignatureResource &&
+                  SelectSignedManifest(publicKey, {embeddedManifest, embeddedSignature}, external,
+                                       selection, error) &&
+                  ParseManifest(selection.bytes, view, error);
+  embeddedSignatureValid = selection.embeddedSignatureValid;
+  externalSelected = selection.externalSelected;
+  if (manifestValid)
+  {
+    std::vector<ModuleIdentityV1> identities;
+    for (const auto& module : modules)
     {
-      std::vector<ModuleIdentityV1> identities;
-      for (const auto& module : modules)
+      if (module.exactValid)
+        identities.push_back(module.identity.identity);
+    }
+    bool ambiguous = false;
+    const auto* record = SelectExactRecord(view, identities, ambiguous);
+    if (ambiguous)
+      error = "more than one compatibility record matches";
+    else if (!record)
+      error = "no exact compatibility record matches installed modules";
+    else
+    {
+      recordMatched = true;
+      recordId = record->recordId;
+      matchedBackendFlags = record->backendFlags;
+      const auto expected = RecordModules(view, *record);
+      for (const auto& symbol : RecordSymbols(view, *record))
       {
-        if (module.exactValid)
-          identities.push_back(module.identity.identity);
-      }
-      bool ambiguous = false;
-      const auto* record = SelectExactRecord(view, identities, ambiguous);
-      if (ambiguous)
-      {
-        error = "more than one compatibility record matches";
-      }
-      else if (!record)
-      {
-        error = "no exact compatibility record matches installed modules";
-      }
-      else
-      {
-        recordMatched = true;
-        recordId = record->recordId;
-        matchedBackendFlags = record->backendFlags;
-        const auto expected = RecordModules(view, *record);
-        for (const auto& symbol : RecordSymbols(view, *record))
+        const auto found =
+            std::find_if(modules.begin(), modules.end(), [&](const ModuleCheck& module) {
+              return module.exactValid &&
+                     ModuleIdentityEqual(expected[symbol.moduleIndex], module.identity.identity);
+            });
+        if (found == modules.end() ||
+            !ValidateSymbolRva(found->image, symbol.rva, static_cast<SymbolKind>(symbol.kind)))
         {
-          const auto found =
-              std::find_if(modules.begin(), modules.end(), [&](const ModuleCheck& module) {
-                return module.exactValid &&
-                       ModuleIdentityEqual(expected[symbol.moduleIndex], module.identity.identity);
-              });
-          if (found == modules.end() ||
-              !ValidateSymbolRva(found->image, symbol.rva, static_cast<SymbolKind>(symbol.kind)))
+          recordMatched = false;
+          error = "record contains an RVA with invalid range or section permissions";
+          break;
+        }
+      }
+      if (recordMatched)
+      {
+        for (const auto& adjustment : RecordAdjustments(view, *record))
+        {
+          const bool valid =
+              adjustment.adjustmentId ==
+                  static_cast<std::uint16_t>(AdjustmentId::TaskListWnd_ITaskListUI) &&
+              adjustment.required == 1 && adjustment.moduleIndex < expected.size() &&
+              adjustment.objectSize >= sizeof(void*) && adjustment.objectSize <= 1024 * 1024 &&
+              adjustment.offset % alignof(void*) == 0 &&
+              adjustment.offset <= adjustment.objectSize - sizeof(void*);
+          if (!valid)
           {
             recordMatched = false;
-            error = "record contains an RVA with invalid range or section permissions";
+            error = "record contains an invalid typed adjustment";
             break;
           }
-        }
-        if (recordMatched)
-        {
-          for (const auto& adjustment : RecordAdjustments(view, *record))
-          {
-            const bool valid =
-                adjustment.adjustmentId ==
-                    static_cast<std::uint16_t>(AdjustmentId::TaskListWnd_ITaskListUI) &&
-                adjustment.required == 1 && adjustment.moduleIndex < expected.size() &&
-                adjustment.objectSize >= sizeof(void*) && adjustment.objectSize <= 1024 * 1024 &&
-                adjustment.offset % alignof(void*) == 0 &&
-                adjustment.offset <= adjustment.objectSize - sizeof(void*);
-            if (!valid)
-            {
-              recordMatched = false;
-              error = "record contains an invalid typed adjustment";
-              break;
-            }
-            ++matchedAdjustmentCount;
-          }
+          ++matchedAdjustmentCount;
         }
       }
     }
-    if (!manifestValid || !recordMatched)
-    {
-      reasons.push_back(L"manifest: " + Wide(error));
-    }
   }
+  if (!manifestValid || !recordMatched)
+    reasons.push_back(L"manifest: " + Wide(error));
 
-  const bool success = payloadValid && modulesValid && keyValid &&
-                       (!manifestRequested || (manifestValid && recordMatched));
+  const bool success = payloadValid && modulesValid && keyValid && manifestValid && recordMatched;
   std::wostringstream report;
   if (json)
   {
@@ -350,10 +364,16 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
       }
       report << L'}';
     }
-    report << L"],\"manifest_requested\":" << (manifestRequested ? L"true" : L"false")
-           << L",\"manifest_valid\":" << (manifestValid ? L"true" : L"false")
-           << L",\"record_matched\":" << (recordMatched ? L"true" : L"false") << L",\"record_id\":"
-           << recordId << L",\"backend_flags\":" << matchedBackendFlags << L",\"adjustment_count\":"
+    report << L"],\"embedded_manifest_present\":" << (embeddedPresent ? L"true" : L"false")
+           << L",\"embedded_manifest_signature_valid\":"
+           << (embeddedSignatureValid ? L"true" : L"false") << L",\"external_manifest_requested\":"
+           << (manifestRequested ? L"true" : L"false") << L",\"external_manifest_selected\":"
+           << (externalSelected ? L"true" : L"false") << L",\"manifest_source\":\""
+           << (externalSelected ? L"external" : L"embedded") << L"\",\"manifest_requested\":"
+           << (manifestRequested ? L"true" : L"false") << L",\"manifest_valid\":"
+           << (manifestValid ? L"true" : L"false") << L",\"record_matched\":"
+           << (recordMatched ? L"true" : L"false") << L",\"record_id\":" << recordId
+           << L",\"backend_flags\":" << matchedBackendFlags << L",\"adjustment_count\":"
            << matchedAdjustmentCount << L",\"compatibility_status\":\""
            << (recordMatched ? L"supported" : L"unsupported") << L"\",\"reasons\":[";
     for (std::size_t index = 0; index < reasons.size(); ++index)
@@ -389,14 +409,12 @@ int RunOfflineDiagnostics(const int argc, wchar_t** argv) noexcept
       }
       report << L"\n";
     }
-    if (manifestRequested)
-    {
-      report << L"Supplied manifest: " << (manifestValid ? L"signature valid" : L"invalid")
-             << L"\nExact record match: " << (recordMatched ? L"yes" : L"no")
-             << L"\nBackend flags: " << matchedBackendFlags << L"\nTyped adjustments: "
-             << matchedAdjustmentCount << L"\nCompatibility: "
-             << (recordMatched ? L"SUPPORTED" : L"UNSUPPORTED") << L"\n";
-    }
+    report << L"Embedded baseline: "
+           << (embeddedSignatureValid ? L"signature valid" : L"missing or invalid")
+           << L"\nManifest source: " << (externalSelected ? L"newer external" : L"embedded")
+           << L"\nExact record match: " << (recordMatched ? L"yes" : L"no") << L"\nBackend flags: "
+           << matchedBackendFlags << L"\nTyped adjustments: " << matchedAdjustmentCount
+           << L"\nCompatibility: " << (recordMatched ? L"SUPPORTED" : L"UNSUPPORTED") << L"\n";
     for (const auto& reason : reasons)
       report << L"REJECT: " << reason << L"\n";
     report << L"Result: " << (success ? L"PASS" : L"FAIL CLOSED") << L"\n";

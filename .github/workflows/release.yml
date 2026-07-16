@@ -21,7 +21,7 @@ jobs:
             out/release-secrets/manifest.private.blob out/release-secrets/manifest.public.blob
       - name: Build and test Release
         run: |
-          cmake -S . -B out/release -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/release-secrets/manifest.public.blob
+          cmake -S . -B out/release -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_ALLOW_EMPTY_BASELINE=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/release-secrets/manifest.public.blob
           cmake --build out/release --config Release --parallel
           ctest --test-dir out/release -C Release --output-on-failure
       - name: Package without private material

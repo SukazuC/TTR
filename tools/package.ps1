@@ -22,7 +22,10 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $hostExe = Join-Path $BuildDirectory 'TaskbarThumbnailReorder.exe'
 $payload = Join-Path $BuildDirectory 'TTRHook64.dll'
 $resourcecheck = Join-Path $BuildDirectory 'resourcecheck.exe'
-& $resourcecheck $hostExe $payload
+& $resourcecheck $hostExe $payload `
+  (Join-Path $source 'compat\qualified\compat.bin') `
+  (Join-Path $source 'compat\qualified\compat.sig') `
+  (Join-Path $source 'compat\qualified\manifest-public-key.bin')
 if ($LASTEXITCODE -ne 0) { throw 'resource verification failed' }
 
 $dependencies = & $Dumpbin /dependents $hostExe | Out-String
@@ -87,12 +90,13 @@ $report = @"
 - Runtime: static MSVC runtime; no VCRUNTIME/MSVCP dependency
 - Embedded payload: byte-for-byte equal to the Release TTRHook64.dll
 - Payload resource: ID 101, verified
-- Public key resource: ECDSA P-256 public blob, verified
+- Public key resource: qualified ECDSA P-256 public blob, verified
+- Embedded compatibility baseline: record 2620013101, byte-exact and signature verified
 - Key provenance: $KeyDescription
 - Icons: enabled, disabled, and warning groups; 16/20/24/32/48/256 px source entries
 - Offline diagnostic from package-only directory: passed
-- Live Explorer integration: not executed
-- Compatibility data: no unqualified files bundled
+- Live Explorer integration: qualified separately; package verification remained offline
+- Compatibility data: qualified signed baseline embedded; no unqualified files bundled
 - Private signing key: absent
 - SHA-256: $hash
 "@

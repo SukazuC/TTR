@@ -1,9 +1,12 @@
 #include "crypto.h"
+#include "manifest_selection.h"
 #include "sha256.h"
+#include "ttr_manifest.h"
 
 #include <Windows.h>
 #include <bcrypt.h>
 
+#include <array>
 #include <iostream>
 #include <span>
 #include <string>
@@ -77,6 +80,13 @@ std::vector<std::byte> Sign(BCRYPT_KEY_HANDLE key, const std::span<const std::by
   return signature;
 }
 
+std::vector<std::byte> Manifest(const std::uint64_t sequence)
+{
+  auto bytes = ttr::EmptyManifestBytes();
+  reinterpret_cast<ttr::ManifestHeaderV2*>(bytes.data())->sequence = sequence;
+  return bytes;
+}
+
 } // namespace
 
 int main()
@@ -108,5 +118,42 @@ int main()
         "truncated signature rejected");
   const std::vector<std::byte> invalidKey(8);
   Check(!ttr::ValidateEcdsaP256PublicKey(invalidKey, error), "invalid key blob rejected");
+
+  auto embedded = Manifest(10);
+  auto embeddedSignature = Sign(pair.key, embedded);
+  ttr::ManifestSelectionResult selection;
+  Check(ttr::SelectSignedManifest(pair.publicBlob, {embedded, embeddedSignature}, {}, selection,
+                                  error) &&
+            selection.embeddedSignatureValid && selection.bytes == embedded,
+        "valid embedded baseline selected");
+  Check(ttr::SelectSignedManifest(pair.publicBlob, {}, {}, selection, error) &&
+            selection.bytes.size() == sizeof(ttr::ManifestHeaderV2) && !selection.embeddedPresent,
+        "missing embedded baseline remains fail closed");
+  auto invalidEmbeddedSignature = embeddedSignature;
+  invalidEmbeddedSignature[0] ^= std::byte{1};
+  Check(!ttr::SelectSignedManifest(pair.publicBlob, {embedded, invalidEmbeddedSignature}, {},
+                                   selection, error),
+        "invalid embedded signature rejected");
+  auto newer = Manifest(11);
+  auto newerSignature = Sign(pair.key, newer);
+  const std::array newerPair{ttr::SignedManifestPair{newer, newerSignature}};
+  Check(ttr::SelectSignedManifest(pair.publicBlob, {embedded, embeddedSignature}, newerPair,
+                                  selection, error) &&
+            selection.externalSelected && selection.bytes == newer,
+        "newer external manifest selected");
+  auto older = Manifest(9);
+  auto olderSignature = Sign(pair.key, older);
+  const std::array olderPair{ttr::SignedManifestPair{older, olderSignature}};
+  Check(ttr::SelectSignedManifest(pair.publicBlob, {embedded, embeddedSignature}, olderPair,
+                                  selection, error) &&
+            !selection.externalSelected && selection.bytes == embedded,
+        "older external manifest cannot roll back baseline");
+  auto invalidExternalSignature = newerSignature;
+  invalidExternalSignature[0] ^= std::byte{1};
+  const std::array invalidPair{ttr::SignedManifestPair{newer, invalidExternalSignature}};
+  Check(ttr::SelectSignedManifest(pair.publicBlob, {embedded, embeddedSignature}, invalidPair,
+                                  selection, error) &&
+            !selection.externalSelected && selection.bytes == embedded,
+        "invalid external pair falls back to embedded baseline");
   return failures ? 1 : 0;
 }

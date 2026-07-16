@@ -2,11 +2,12 @@
 
 #include "autostart.h"
 #include "crypto.h"
+#include "manifest_selection.h"
 
 #include <Windows.h>
 
 #include <algorithm>
-#include <cstring>
+#include <array>
 #include <filesystem>
 #include <fstream>
 
@@ -30,55 +31,55 @@ bool ReadBounded(const std::wstring& path, std::vector<std::byte>& output, const
   return !!file;
 }
 
-bool EmbeddedPublicKey(std::span<const std::byte>& key) noexcept
+bool EmbeddedResource(const WORD id, std::span<const std::byte>& bytes) noexcept
 {
-  const auto resource = FindResourceW(nullptr, MAKEINTRESOURCEW(102), RT_RCDATA);
+  const auto resource = FindResourceW(nullptr, MAKEINTRESOURCEW(id), RT_RCDATA);
   const auto loaded = resource ? LoadResource(nullptr, resource) : nullptr;
   const auto* data = loaded ? static_cast<const std::byte*>(LockResource(loaded)) : nullptr;
   const DWORD size = resource ? SizeofResource(nullptr, resource) : 0;
   if (!data || !size)
     return false;
-  key = {data, size};
+  bytes = {data, size};
   return true;
-}
-
-std::vector<std::byte> EmptyManifest()
-{
-  std::vector<std::byte> bytes(sizeof(ManifestHeaderV2));
-  auto* header = reinterpret_cast<ManifestHeaderV2*>(bytes.data());
-  std::memcpy(header->magic, kManifestMagic, sizeof(header->magic));
-  header->formatVersion = kManifestVersion;
-  header->headerSize = sizeof(*header);
-  header->totalSize = static_cast<std::uint32_t>(bytes.size());
-  header->recordTableOffset = sizeof(*header);
-  return bytes;
 }
 
 } // namespace
 
 bool ManifestStore::Load(std::string& error) noexcept
 {
-  bytes_ = EmptyManifest();
+  bytes_ = EmptyManifestBytes();
   const auto base = ApplicationDataDirectory() + L"\\compat\\compat";
-  std::span<const std::byte> publicKey;
-  if (EmbeddedPublicKey(publicKey))
+  std::span<const std::byte> publicKey, embeddedManifest, embeddedSignature;
+  if (!EmbeddedResource(102, publicKey))
   {
-    auto tryPair = [&](const std::wstring& suffix) {
-      std::vector<std::byte> candidate, signature;
-      std::string verificationError;
-      ManifestView candidateView;
-      if (!ReadBounded(base + L".bin" + suffix, candidate, kMaxManifestBytes) ||
-          !ReadBounded(base + L".sig" + suffix, signature, 256) ||
-          !VerifyEcdsaP256(publicKey, candidate, signature, verificationError) ||
-          !ParseManifest(candidate, candidateView, verificationError) ||
-          candidateView.header->sequence == 0)
-        return false;
-      bytes_ = std::move(candidate);
-      return true;
-    };
-    if (!tryPair(L""))
-      tryPair(L".bak");
+    error = "embedded compatibility public key is missing";
+    return false;
   }
+  const bool hasEmbeddedManifest = EmbeddedResource(103, embeddedManifest);
+  const bool hasEmbeddedSignature = EmbeddedResource(104, embeddedSignature);
+  if (hasEmbeddedManifest != hasEmbeddedSignature)
+  {
+    error = "embedded compatibility baseline is incomplete";
+    return false;
+  }
+  std::string keyError;
+  if (!ValidateEcdsaP256PublicKey(publicKey, keyError) && !hasEmbeddedManifest)
+    return ParseManifest(bytes_, view_, error);
+
+  std::array<std::vector<std::byte>, 4> externalBytes;
+  ReadBounded(base + L".bin", externalBytes[0], kMaxManifestBytes);
+  ReadBounded(base + L".sig", externalBytes[1], 256);
+  ReadBounded(base + L".bin.bak", externalBytes[2], kMaxManifestBytes);
+  ReadBounded(base + L".sig.bak", externalBytes[3], 256);
+  const std::array external{
+      SignedManifestPair{externalBytes[0], externalBytes[1]},
+      SignedManifestPair{externalBytes[2], externalBytes[3]},
+  };
+  ManifestSelectionResult selection;
+  if (!SelectSignedManifest(publicKey, {embeddedManifest, embeddedSignature}, external, selection,
+                            error))
+    return false;
+  bytes_ = std::move(selection.bytes);
   return ParseManifest(bytes_, view_, error);
 }
 

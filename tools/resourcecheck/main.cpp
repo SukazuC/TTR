@@ -1,4 +1,5 @@
 #include "crypto.h"
+#include "manifest_selection.h"
 #include "pe_identity.h"
 #include "ttr_version.h"
 
@@ -67,9 +68,10 @@ bool VersionMatches(const std::wstring& path)
 
 int wmain(const int argc, wchar_t** argv)
 {
-  if (argc != 3)
+  if (argc != 6)
   {
-    std::cerr << "usage: resourcecheck <host.exe> <payload.dll>\n";
+    std::cerr
+        << "usage: resourcecheck <host.exe> <payload.dll> <manifest> <signature> <public-key>\n";
     return 2;
   }
   ttr::PeImage host;
@@ -88,6 +90,8 @@ int wmain(const int argc, wchar_t** argv)
   }
   std::span<const std::byte> embeddedPayload;
   std::span<const std::byte> publicKey;
+  std::span<const std::byte> embeddedManifest;
+  std::span<const std::byte> embeddedSignature;
   ttr::PeImage payloadImage;
   const auto builtPayload = Read(argv[2]);
   const bool payloadValid =
@@ -95,20 +99,30 @@ int wmain(const int argc, wchar_t** argv)
       std::ranges::equal(embeddedPayload, builtPayload) &&
       ttr::InspectPeImageBytes(embeddedPayload, "ttrhook64.dll", payloadImage, error);
   const bool keyValid = Resource(module, 102, RT_RCDATA, publicKey) &&
-                        ttr::ValidateEcdsaP256PublicKey(publicKey, error);
+                        ttr::ValidateEcdsaP256PublicKey(publicKey, error) &&
+                        std::ranges::equal(publicKey, Read(argv[5]));
+  ttr::ManifestSelectionResult selection;
+  const bool baselineValid =
+      Resource(module, 103, RT_RCDATA, embeddedManifest) &&
+      Resource(module, 104, RT_RCDATA, embeddedSignature) &&
+      std::ranges::equal(embeddedManifest, Read(argv[3])) &&
+      std::ranges::equal(embeddedSignature, Read(argv[4])) && keyValid &&
+      ttr::SelectSignedManifest(publicKey, {embeddedManifest, embeddedSignature}, {}, selection,
+                                error) &&
+      selection.embeddedSignatureValid;
   const bool iconsValid = FindResourceW(module, MAKEINTRESOURCEW(201), RT_GROUP_ICON) &&
                           FindResourceW(module, MAKEINTRESOURCEW(202), RT_GROUP_ICON) &&
                           FindResourceW(module, MAKEINTRESOURCEW(203), RT_GROUP_ICON);
   const bool versionValid = VersionMatches(argv[1]);
   FreeLibrary(module);
-  if (!payloadValid || !keyValid || !iconsValid || !versionValid)
+  if (!payloadValid || !keyValid || !baselineValid || !iconsValid || !versionValid)
   {
     std::cerr << "resourcecheck: payload=" << payloadValid << " key=" << keyValid
-              << " icons=" << iconsValid << " version=" << versionValid << " detail=" << error
-              << '\n';
+              << " baseline=" << baselineValid << " icons=" << iconsValid
+              << " version=" << versionValid << " detail=" << error << '\n';
     return 1;
   }
-  std::cout << "resourcecheck: host x64; embedded payload exact/x64; public key valid; "
-               "icons present; version matches\n";
+  std::cout << "resourcecheck: host x64; embedded payload exact/x64; public key and signed "
+               "baseline exact/valid; icons present; version matches\n";
   return 0;
 }

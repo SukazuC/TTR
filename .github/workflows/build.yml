@@ -18,7 +18,7 @@ jobs:
         run: |
           cmake --build out/build/ci --config Debug --parallel
           ctest --test-dir out/build/ci -C Debug --output-on-failure
-      - name: Build and test fail-closed Release
+      - name: Build and test qualified baseline Release
         run: |
           cmake --build out/build/ci --config Release --parallel
           ctest --test-dir out/build/ci -C Release --output-on-failure
@@ -30,7 +30,7 @@ jobs:
             out/ci-secrets/manifest.private.blob out/ci-secrets/manifest.public.blob
       - name: Build and test personalized Release
         run: |
-          cmake -S . -B out/build/ci-package -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/ci-secrets/manifest.public.blob
+          cmake -S . -B out/build/ci-package -A x64 -DTTR_WARNINGS_AS_ERRORS=ON -DTTR_ALLOW_EMPTY_BASELINE=ON -DTTR_PUBLIC_KEY_FILE=${{ github.workspace }}/out/ci-secrets/manifest.public.blob
           cmake --build out/build/ci-package --config Release --parallel
           ctest --test-dir out/build/ci-package -C Release --output-on-failure
       - name: Construct and verify deterministic package

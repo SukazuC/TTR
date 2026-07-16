@@ -28,6 +28,7 @@ class App
 {
 public:
   int Run(HINSTANCE, int);
+  static int RunStartupSmoke(HINSTANCE) noexcept;
   static constexpr wchar_t kWindowClass[] = L"TaskbarThumbnailReorder.Host.v1";
 
 private:

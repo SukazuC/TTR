@@ -93,6 +93,47 @@ int App::Run(HINSTANCE instance, int)
   return static_cast<int>(msg.wParam);
 }
 
+int App::RunStartupSmoke(HINSTANCE instance) noexcept
+{
+  App app;
+  constexpr wchar_t smokeClass[] = L"TaskbarThumbnailReorder.HostStartupSmoke.v1";
+  WNDCLASSEXW wc{sizeof(wc)};
+  wc.lpfnWndProc = WindowProc;
+  wc.hInstance = instance;
+  wc.lpszClassName = smokeClass;
+  if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    return 1;
+  const HWND window = CreateWindowExW(0, smokeClass, L"", WS_OVERLAPPED, 0, 0, 0, 0, nullptr,
+                                      nullptr, instance, &app);
+  if (!window)
+  {
+    UnregisterClassW(smokeClass, instance);
+    return 2;
+  }
+  const bool initialized = reinterpret_cast<App*>(GetWindowLongPtrW(window, GWLP_USERDATA)) == &app;
+  constexpr UINT smokeMessage = WM_APP + 100;
+  const bool posted = PostMessageW(window, smokeMessage, 0, 0) != FALSE;
+  bool dispatched = false;
+  MSG message{};
+  for (unsigned attempt = 0; attempt < 32; ++attempt)
+  {
+    if (!PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+      continue;
+    if (message.hwnd == window && message.message == smokeMessage)
+      dispatched = true;
+    TranslateMessage(&message);
+    DispatchMessageW(&message);
+    if (dispatched)
+      break;
+  }
+  DestroyWindow(window);
+  while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+  {
+  }
+  UnregisterClassW(smokeClass, instance);
+  return initialized && posted && dispatched ? 0 : 3;
+}
+
 LRESULT CALLBACK App::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
   if (message == WM_NCCREATE)

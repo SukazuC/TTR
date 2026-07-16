@@ -4,8 +4,13 @@ project(TaskbarThumbnailReorder VERSION 0.1.0 LANGUAGES C CXX RC)
 option(TTR_WARNINGS_AS_ERRORS "Treat first-party warnings as errors" ON)
 option(TTR_ENABLE_ANALYZE "Enable MSVC native static analysis" OFF)
 option(TTR_ENABLE_ASAN "Enable AddressSanitizer for offline code" OFF)
-set(TTR_PUBLIC_KEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/manifest-public-key.bin"
+option(TTR_ALLOW_EMPTY_BASELINE "Explicitly build without a signed compatibility baseline" OFF)
+set(TTR_PUBLIC_KEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/manifest-public-key.bin"
     CACHE FILEPATH "ECDSA P-256 public key blob embedded in the host")
+set(TTR_BASELINE_MANIFEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/compat.bin"
+    CACHE FILEPATH "Signed compatibility baseline embedded in the host")
+set(TTR_BASELINE_SIGNATURE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/compat.sig"
+    CACHE FILEPATH "Signature for the embedded compatibility baseline")
 set(TTR_MANIFEST_URL "" CACHE STRING "Optional HTTPS compatibility-manifest URL")
 
 if(NOT WIN32)
@@ -44,7 +49,9 @@ if(NOT EXISTS "${TTR_PUBLIC_KEY_FILE}")
   message(FATAL_ERROR "TTR_PUBLIC_KEY_FILE does not exist: ${TTR_PUBLIC_KEY_FILE}")
 endif()
 file(SIZE "${TTR_PUBLIC_KEY_FILE}" TTR_PUBLIC_KEY_SIZE)
-if(TTR_PUBLIC_KEY_SIZE LESS 72)
+if(TTR_PUBLIC_KEY_SIZE LESS 72 AND NOT TTR_ALLOW_EMPTY_BASELINE)
+  message(FATAL_ERROR "A Release-capable build requires the qualified 72-byte public key")
+elseif(TTR_PUBLIC_KEY_SIZE LESS 72)
   message(WARNING "The embedded compatibility public key is a development placeholder; signed updates will fail closed")
   set(TTR_DEVELOPMENT_KEY 1)
 else()
@@ -52,6 +59,33 @@ else()
 endif()
 file(TO_CMAKE_PATH "${TTR_PUBLIC_KEY_FILE}" TTR_PUBLIC_KEY_PATH)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TTR_PUBLIC_KEY_FILE}")
+set(TTR_BASELINE_RESOURCE_LINES "")
+set(TTR_EMBEDDED_BASELINE 0)
+if(NOT TTR_ALLOW_EMPTY_BASELINE)
+  foreach(TTR_BASELINE_FILE IN ITEMS "${TTR_BASELINE_MANIFEST_FILE}" "${TTR_BASELINE_SIGNATURE_FILE}")
+    if(NOT EXISTS "${TTR_BASELINE_FILE}")
+      message(FATAL_ERROR "Qualified compatibility baseline file is missing: ${TTR_BASELINE_FILE}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TTR_BASELINE_FILE}")
+  endforeach()
+  execute_process(
+    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass
+      -File "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ValidateCompatibilityBaseline.ps1"
+      -PublicKey "${TTR_PUBLIC_KEY_FILE}"
+      -Manifest "${TTR_BASELINE_MANIFEST_FILE}"
+      -Signature "${TTR_BASELINE_SIGNATURE_FILE}"
+    RESULT_VARIABLE TTR_BASELINE_VALIDATION_RESULT
+    OUTPUT_VARIABLE TTR_BASELINE_VALIDATION_OUTPUT
+    ERROR_VARIABLE TTR_BASELINE_VALIDATION_ERROR)
+  if(NOT TTR_BASELINE_VALIDATION_RESULT EQUAL 0)
+    message(FATAL_ERROR "Qualified compatibility baseline validation failed: ${TTR_BASELINE_VALIDATION_ERROR}${TTR_BASELINE_VALIDATION_OUTPUT}")
+  endif()
+  file(TO_CMAKE_PATH "${TTR_BASELINE_MANIFEST_FILE}" TTR_BASELINE_MANIFEST_PATH)
+  file(TO_CMAKE_PATH "${TTR_BASELINE_SIGNATURE_FILE}" TTR_BASELINE_SIGNATURE_PATH)
+  set(TTR_BASELINE_RESOURCE_LINES
+      "103 RCDATA \"${TTR_BASELINE_MANIFEST_PATH}\"\n104 RCDATA \"${TTR_BASELINE_SIGNATURE_PATH}\"")
+  set(TTR_EMBEDDED_BASELINE 1)
+endif()
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/host/resources/icon-enabled.ico" TTR_ICON_ENABLED_PATH)
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/host/resources/icon-disabled.ico" TTR_ICON_DISABLED_PATH)
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/host/resources/icon-warning.ico" TTR_ICON_WARNING_PATH)
@@ -60,6 +94,7 @@ configure_file(host/resources/app.rc.in generated/app.rc @ONLY)
 add_library(ttr_common STATIC
   common/crypto.cpp
   common/manifest.cpp
+  common/manifest_selection.cpp
   common/pe_identity.cpp
   common/sha256.cpp)
 target_include_directories(ttr_common PUBLIC include common "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -213,5 +248,7 @@ if(BUILD_TESTING)
       -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/run_diagnostic_test.ps1"
       -HostExe "$<TARGET_FILE:TaskbarThumbnailReorder>"
       -DevelopmentKey ${TTR_DEVELOPMENT_KEY}
+      -EmbeddedBaseline ${TTR_EMBEDDED_BASELINE}
       -Scratch "$<TARGET_FILE_DIR:TaskbarThumbnailReorder>/diagnostic-test-scratch")
+  add_test(NAME host_startup_smoke COMMAND TaskbarThumbnailReorder --host-startup-smoke)
 endif()

@@ -29,6 +29,11 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
       LocalFree(argv);
       return 0;
     }
+    if (argc == 2 && _wcsicmp(argv[1], L"--host-startup-smoke") == 0)
+    {
+      LocalFree(argv);
+      return ttr::host::App::RunStartupSmoke(instance);
+    }
     for (int i = 1; i < argc; ++i)
       if (_wcsicmp(argv[i], L"--replace-current") == 0)
         replace = true;
