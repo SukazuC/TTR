@@ -95,11 +95,13 @@ int App::Run(HINSTANCE instance, int)
 
 LRESULT CALLBACK App::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-  App* self = message == WM_NCCREATE
-                  ? static_cast<App*>(reinterpret_cast<CREATESTRUCTW*>(lParam)->lpCreateParams)
-                  : reinterpret_cast<App*>(GetWindowLongPtrW(window, GWLP_USERDATA));
   if (message == WM_NCCREATE)
+  {
+    auto* self = static_cast<App*>(reinterpret_cast<CREATESTRUCTW*>(lParam)->lpCreateParams);
     SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+    return TRUE;
+  }
+  auto* self = reinterpret_cast<App*>(GetWindowLongPtrW(window, GWLP_USERDATA));
   return self ? self->HandleMessage(message, wParam, lParam)
               : DefWindowProcW(window, message, wParam, lParam);
 }
