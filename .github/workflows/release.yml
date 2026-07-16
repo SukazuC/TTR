@@ -33,6 +33,7 @@ jobs:
             -OutputDirectory out/package `
             -Dumpbin (Get-Command dumpbin.exe).Source `
             -PrivateKey out/release-secrets/manifest.private.blob `
+            -AllowUnsupportedMachine `
             -KeyDescription 'ephemeral workflow key; replace with personal public key for use'
           Remove-Item -LiteralPath out/release-secrets -Recurse -Force
       - uses: actions/upload-artifact@v4

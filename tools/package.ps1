@@ -4,7 +4,8 @@ param(
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [Parameter(Mandatory = $true)][string]$Dumpbin,
   [Parameter(Mandatory = $true)][string]$PrivateKey,
-  [string]$KeyDescription = 'personal local public key'
+  [string]$KeyDescription = 'personal local public key',
+  [switch]$AllowUnsupportedMachine
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,10 +72,15 @@ $diagnosticErr = Join-Path $output 'diagnostic.stderr.txt'
 $process = Start-Process -FilePath $packageExe -ArgumentList @('--diagnose-offline', '--json') `
   -WorkingDirectory $output -NoNewWindow -Wait -PassThru `
   -RedirectStandardOutput $diagnosticOut -RedirectStandardError $diagnosticErr
-if ($process.ExitCode -ne 0) { throw "packaged offline diagnostic failed: $($process.ExitCode)" }
 $diagnostic = Get-Content -Raw -LiteralPath $diagnosticOut | ConvertFrom-Json
-if ($diagnostic.live_integration -ne $false -or $diagnostic.result -ne 'pass') {
-  throw 'packaged offline diagnostic did not pass safely'
+$supported = $process.ExitCode -eq 0 -and $diagnostic.result -eq 'pass' -and
+  $diagnostic.compatibility_status -eq 'supported' -and $diagnostic.record_matched -eq $true
+$safeUnsupported = $AllowUnsupportedMachine -and $process.ExitCode -eq 6 -and
+  $diagnostic.result -eq 'fail' -and $diagnostic.compatibility_status -eq 'unsupported' -and
+  $diagnostic.record_matched -eq $false -and $diagnostic.manifest_valid -eq $true -and
+  $diagnostic.embedded_manifest_signature_valid -eq $true
+if ($diagnostic.live_integration -ne $false -or (-not $supported -and -not $safeUnsupported)) {
+  throw "packaged offline diagnostic did not pass safely: $($process.ExitCode)"
 }
 Remove-Item -LiteralPath $diagnosticOut, $diagnosticErr -Force
 
@@ -94,7 +100,7 @@ $report = @"
 - Embedded compatibility baseline: record 2620013101, byte-exact and signature verified
 - Key provenance: $KeyDescription
 - Icons: enabled, disabled, and warning groups; 16/20/24/32/48/256 px source entries
-- Offline diagnostic from package-only directory: passed
+- Offline diagnostic from package-only directory: $(if ($supported) { 'supported' } else { 'valid baseline; unsupported runner identity; failed closed' })
 - Live Explorer integration: qualified separately; package verification remained offline
 - Compatibility data: qualified signed baseline embedded; no unqualified files bundled
 - Private signing key: absent
