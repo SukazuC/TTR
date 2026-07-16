@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: |
           ./tools/package.ps1 `
-            -BuildDirectory out/build/ci-package/Release `
+            -BuildDirectory out/build/ci/Release `
             -SourceDirectory . `
             -OutputDirectory out/package `
             -Dumpbin (Get-Command dumpbin.exe).Source `
