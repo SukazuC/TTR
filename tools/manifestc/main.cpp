@@ -1,14 +1,207 @@
 #include "ttr_manifest.h"
 #include <Windows.h>
-#include <objbase.h>
-#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <nlohmann/json.hpp>
+#include <objbase.h>
 #include <vector>
 
-namespace {using json=nlohmann::json;template<class T>void Append(std::vector<std::byte>&out,const T&v){auto p=reinterpret_cast<const std::byte*>(&v);out.insert(out.end(),p,p+sizeof(v));}void Align(std::vector<std::byte>&v){while(v.size()%8)v.push_back(std::byte{});}std::map<std::string,ttr::SymbolId>Symbols(){using S=ttr::SymbolId;return{{"TaskListWnd_Vtable_ITaskListUI",S::TaskListWnd_Vtable_ITaskListUI},{"TaskListThumbnailWnd_GetHoverIndex",S::TaskListThumbnailWnd_GetHoverIndex},{"TaskListThumbnailWnd_GetTaskItem",S::TaskListThumbnailWnd_GetTaskItem},{"TaskListThumbnailWnd_GetTaskGroup",S::TaskListThumbnailWnd_GetTaskGroup},{"TaskListThumbnailWnd_TaskReordered",S::TaskListThumbnailWnd_TaskReordered},{"TaskListThumbnailWnd_WndProc",S::TaskListThumbnailWnd_WndProc},{"TaskGroup_GetNumItems",S::TaskGroup_GetNumItems},{"TaskListWnd_GetTBGroupFromGroup",S::TaskListWnd_GetTBGroupFromGroup},{"TaskBtnGroup_GetGroupType",S::TaskBtnGroup_GetGroupType},{"TaskBtnGroup_IndexOfTaskItem",S::TaskBtnGroup_IndexOfTaskItem},{"TaskListWnd_TaskInclusionChanged",S::TaskListWnd_TaskInclusionChanged},{"TaskItemFilter_IsTaskAllowed",S::TaskItemFilter_IsTaskAllowed},{"TaskItemThumbnail_ConstructorV1",S::TaskItemThumbnail_ConstructorV1},{"TaskItemThumbnail_ConstructorV2",S::TaskItemThumbnail_ConstructorV2},{"TaskGroup_Thumbnails",S::TaskGroup_Thumbnails},{"TaskItemThumbnailVector_Size",S::TaskItemThumbnailVector_Size},{"TaskItemThumbnailVector_GetAt",S::TaskItemThumbnailVector_GetAt},{"TaskListWnd_HandleExtendedUIClick",S::TaskListWnd_HandleExtendedUIClick},{"HoverFlyoutModel_TargetItemKey",S::HoverFlyoutModel_TargetItemKey},{"TaskItemThumbnailList_OnPointerMoved",S::TaskItemThumbnailList_OnPointerMoved},{"FlyoutFrame_UpdateFlyoutPosition",S::FlyoutFrame_UpdateFlyoutPosition}};}
-bool Guid(const std::string&s,ttr::GuidBytes&out){int n=MultiByteToWideChar(CP_UTF8,0,s.c_str(),-1,nullptr,0);std::wstring w(n,L'\0');MultiByteToWideChar(CP_UTF8,0,s.c_str(),-1,w.data(),n);GUID g{};if(FAILED(CLSIDFromString(w.c_str(),&g)))return false;std::memcpy(out.value,&g,16);return true;}}
-int main(int argc,char**argv){if(argc!=3){std::cerr<<"usage: manifestc <records.json> <compat.bin>\n";return 2;}try{std::ifstream input(argv[1]);json root;input>>root;if(!root.contains("sequence")||!root.contains("records")||!root["records"].is_array())throw std::runtime_error("root requires sequence and records");std::vector<ttr::ManifestRecordV1>records;std::vector<std::vector<ttr::ModuleIdentityV1>>allModules;std::vector<std::vector<ttr::ManifestSymbolV1>>allSymbols;auto known=Symbols();for(const auto&r:root["records"]){ttr::ManifestRecordV1 record{};record.recordId=r.at("id").get<std::uint64_t>();record.minimumProtocolVersion=1;for(const auto&f:r.at("backend_flags")){auto s=f.get<std::string>();if(s=="classic")record.backendFlags|=ttr::BackendClassic;else if(s=="xaml")record.backendFlags|=ttr::BackendXaml;else if(s=="animated_xaml")record.backendFlags|=ttr::BackendAnimatedXaml;else throw std::runtime_error("unknown backend flag");}std::vector<ttr::ModuleIdentityV1>modules;for(const auto&m:r.at("modules")){ttr::ModuleIdentityV1 module{};auto name=m.at("name").get<std::string>();if(name.empty()||name.size()>=sizeof(module.baseName))throw std::runtime_error("bad module name");std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});strcpy_s(module.baseName,name.c_str());module.timeDateStamp=m.at("timestamp").get<std::uint32_t>();module.sizeOfImage=m.at("size_of_image").get<std::uint32_t>();module.pdbAge=m.at("pdb_age").get<std::uint32_t>();if(!Guid(m.at("pdb_guid").get<std::string>(),module.pdbGuid))throw std::runtime_error("bad PDB GUID");modules.push_back(module);}std::vector<ttr::ManifestSymbolV1>symbols;for(const auto&s:r.at("symbols")){ttr::ManifestSymbolV1 symbol{};auto found=known.find(s.at("id").get<std::string>());if(found==known.end())throw std::runtime_error("unknown symbol id");symbol.symbolId=static_cast<std::uint16_t>(found->second);symbol.moduleIndex=s.at("module").get<std::uint8_t>();symbol.rva=s.at("rva").get<std::uint32_t>();symbol.required=s.value("required",true);auto kind=s.at("kind").get<std::string>();if(kind=="function")symbol.kind=static_cast<std::uint8_t>(ttr::SymbolKind::Function);else if(kind=="data")symbol.kind=static_cast<std::uint8_t>(ttr::SymbolKind::ReadOnlyData);else throw std::runtime_error("unknown symbol kind");symbols.push_back(symbol);}record.moduleCount=static_cast<std::uint32_t>(modules.size());record.symbolCount=static_cast<std::uint32_t>(symbols.size());records.push_back(record);allModules.push_back(std::move(modules));allSymbols.push_back(std::move(symbols));}std::vector<std::byte>out(sizeof(ttr::ManifestHeaderV1)+records.size()*sizeof(ttr::ManifestRecordV1));Align(out);for(size_t i=0;i<records.size();++i){records[i].moduleOffset=static_cast<std::uint32_t>(out.size());for(auto&m:allModules[i])Append(out,m);Align(out);records[i].symbolOffset=static_cast<std::uint32_t>(out.size());for(auto&s:allSymbols[i])Append(out,s);Align(out);}auto*h=reinterpret_cast<ttr::ManifestHeaderV1*>(out.data());std::memcpy(h->magic,ttr::kManifestMagic,8);h->formatVersion=ttr::kManifestVersion;h->headerSize=sizeof(*h);h->totalSize=static_cast<std::uint32_t>(out.size());h->sequence=root["sequence"].get<std::uint64_t>();h->recordCount=static_cast<std::uint32_t>(records.size());h->recordTableOffset=sizeof(*h);std::memcpy(out.data()+h->recordTableOffset,records.data(),records.size()*sizeof(records[0]));ttr::ManifestView view;std::string error;if(!ttr::ParseManifest(out,view,error))throw std::runtime_error(error);std::ofstream file(argv[2],std::ios::binary|std::ios::trunc);file.write(reinterpret_cast<const char*>(out.data()),out.size());if(!file)throw std::runtime_error("write failed");return 0;}catch(const std::exception&e){std::cerr<<"manifestc: "<<e.what()<<"\n";return 1;}}
+namespace
+{
+using json = nlohmann::json;
+template <class T> void Append(std::vector<std::byte>& out, const T& v)
+{
+  auto p = reinterpret_cast<const std::byte*>(&v);
+  out.insert(out.end(), p, p + sizeof(v));
+}
+void Align(std::vector<std::byte>& v)
+{
+  while (v.size() % 8)
+    v.push_back(std::byte{});
+}
+std::map<std::string, ttr::SymbolId> Symbols()
+{
+  using S = ttr::SymbolId;
+  return {{"TaskListThumbnailWnd_GetHoverIndex", S::TaskListThumbnailWnd_GetHoverIndex},
+          {"TaskListThumbnailWnd_GetTaskItem", S::TaskListThumbnailWnd_GetTaskItem},
+          {"TaskListThumbnailWnd_GetTaskGroup", S::TaskListThumbnailWnd_GetTaskGroup},
+          {"TaskListThumbnailWnd_TaskReordered", S::TaskListThumbnailWnd_TaskReordered},
+          {"TaskListThumbnailWnd_WndProc", S::TaskListThumbnailWnd_WndProc},
+          {"TaskGroup_GetNumItems", S::TaskGroup_GetNumItems},
+          {"TaskListWnd_GetTBGroupFromGroup", S::TaskListWnd_GetTBGroupFromGroup},
+          {"TaskBtnGroup_GetGroupType", S::TaskBtnGroup_GetGroupType},
+          {"TaskBtnGroup_IndexOfTaskItem", S::TaskBtnGroup_IndexOfTaskItem},
+          {"TaskListWnd_TaskInclusionChanged", S::TaskListWnd_TaskInclusionChanged},
+          {"TaskItemFilter_IsTaskAllowed", S::TaskItemFilter_IsTaskAllowed},
+          {"TaskItemThumbnail_ConstructorV1", S::TaskItemThumbnail_ConstructorV1},
+          {"TaskItemThumbnail_ConstructorV2", S::TaskItemThumbnail_ConstructorV2},
+          {"TaskGroup_Thumbnails", S::TaskGroup_Thumbnails},
+          {"TaskItemThumbnailVector_Size", S::TaskItemThumbnailVector_Size},
+          {"TaskItemThumbnailVector_GetAt", S::TaskItemThumbnailVector_GetAt},
+          {"TaskListWnd_HandleExtendedUIClick", S::TaskListWnd_HandleExtendedUIClick},
+          {"HoverFlyoutModel_TargetItemKey", S::HoverFlyoutModel_TargetItemKey},
+          {"TaskItemThumbnailList_OnPointerMoved", S::TaskItemThumbnailList_OnPointerMoved},
+          {"FlyoutFrame_UpdateFlyoutPosition", S::FlyoutFrame_UpdateFlyoutPosition}};
+}
+std::map<std::string, ttr::AdjustmentId> Adjustments()
+{
+  return {{"TaskListWnd_ITaskListUI", ttr::AdjustmentId::TaskListWnd_ITaskListUI}};
+}
+bool Guid(const std::string& s, ttr::GuidBytes& out)
+{
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+  std::wstring w(n, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, w.data(), n);
+  GUID g{};
+  if (FAILED(CLSIDFromString(w.c_str(), &g)))
+    return false;
+  std::memcpy(out.value, &g, 16);
+  return true;
+}
+} // namespace
+int main(int argc, char** argv)
+{
+  if (argc != 3)
+  {
+    std::cerr << "usage: manifestc <records.json> <compat.bin>\n";
+    return 2;
+  }
+  try
+  {
+    std::ifstream input(argv[1]);
+    json root;
+    input >> root;
+    if (!root.contains("sequence") || !root.contains("records") || !root["records"].is_array())
+      throw std::runtime_error("root requires sequence and records");
+    std::vector<ttr::ManifestRecordV2> records;
+    std::vector<std::vector<ttr::ModuleIdentityV1>> allModules;
+    std::vector<std::vector<ttr::ManifestSymbolV2>> allSymbols;
+    std::vector<std::vector<ttr::ManifestAdjustmentV2>> allAdjustments;
+    auto known = Symbols();
+    auto knownAdjustments = Adjustments();
+    for (const auto& r : root["records"])
+    {
+      ttr::ManifestRecordV2 record{};
+      record.recordId = r.at("id").get<std::uint64_t>();
+      record.minimumProtocolVersion = 1;
+      for (const auto& f : r.at("backend_flags"))
+      {
+        auto s = f.get<std::string>();
+        if (s == "classic")
+          record.backendFlags |= ttr::BackendClassic;
+        else if (s == "xaml")
+          record.backendFlags |= ttr::BackendXaml;
+        else if (s == "animated_xaml")
+          record.backendFlags |= ttr::BackendAnimatedXaml;
+        else
+          throw std::runtime_error("unknown backend flag");
+      }
+      std::vector<ttr::ModuleIdentityV1> modules;
+      for (const auto& m : r.at("modules"))
+      {
+        ttr::ModuleIdentityV1 module{};
+        auto name = m.at("name").get<std::string>();
+        if (name.empty() || name.size() >= sizeof(module.baseName))
+          throw std::runtime_error("bad module name");
+        std::transform(name.begin(), name.end(), name.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        strcpy_s(module.baseName, name.c_str());
+        module.timeDateStamp = m.at("timestamp").get<std::uint32_t>();
+        module.sizeOfImage = m.at("size_of_image").get<std::uint32_t>();
+        module.pdbAge = m.at("pdb_age").get<std::uint32_t>();
+        if (!Guid(m.at("pdb_guid").get<std::string>(), module.pdbGuid))
+          throw std::runtime_error("bad PDB GUID");
+        modules.push_back(module);
+      }
+      std::vector<ttr::ManifestSymbolV2> symbols;
+      for (const auto& s : r.at("symbols"))
+      {
+        ttr::ManifestSymbolV2 symbol{};
+        auto found = known.find(s.at("id").get<std::string>());
+        if (found == known.end())
+          throw std::runtime_error("unknown symbol id");
+        symbol.symbolId = static_cast<std::uint16_t>(found->second);
+        symbol.moduleIndex = s.at("module").get<std::uint8_t>();
+        symbol.rva = s.at("rva").get<std::uint32_t>();
+        symbol.required = s.value("required", true);
+        auto kind = s.at("kind").get<std::string>();
+        if (kind == "function")
+          symbol.kind = static_cast<std::uint8_t>(ttr::SymbolKind::Function);
+        else if (kind == "data")
+          symbol.kind = static_cast<std::uint8_t>(ttr::SymbolKind::ReadOnlyData);
+        else
+          throw std::runtime_error("unknown symbol kind");
+        symbols.push_back(symbol);
+      }
+      std::vector<ttr::ManifestAdjustmentV2> adjustments;
+      for (const auto& a : r.value("adjustments", json::array()))
+      {
+        ttr::ManifestAdjustmentV2 adjustment{};
+        auto found = knownAdjustments.find(a.at("id").get<std::string>());
+        if (found == knownAdjustments.end())
+          throw std::runtime_error("unknown adjustment id");
+        adjustment.adjustmentId = static_cast<std::uint16_t>(found->second);
+        adjustment.moduleIndex = a.at("module").get<std::uint8_t>();
+        adjustment.required = 1;
+        adjustment.offset = a.at("offset").get<std::uint32_t>();
+        adjustment.objectSize = a.at("object_size").get<std::uint32_t>();
+        adjustments.push_back(adjustment);
+      }
+      record.moduleCount = static_cast<std::uint32_t>(modules.size());
+      record.symbolCount = static_cast<std::uint32_t>(symbols.size());
+      record.adjustmentCount = static_cast<std::uint32_t>(adjustments.size());
+      records.push_back(record);
+      allModules.push_back(std::move(modules));
+      allSymbols.push_back(std::move(symbols));
+      allAdjustments.push_back(std::move(adjustments));
+    }
+    std::vector<std::byte> out(sizeof(ttr::ManifestHeaderV2) +
+                               records.size() * sizeof(ttr::ManifestRecordV2));
+    Align(out);
+    for (size_t i = 0; i < records.size(); ++i)
+    {
+      records[i].moduleOffset = static_cast<std::uint32_t>(out.size());
+      for (auto& m : allModules[i])
+        Append(out, m);
+      Align(out);
+      records[i].symbolOffset = static_cast<std::uint32_t>(out.size());
+      for (auto& s : allSymbols[i])
+        Append(out, s);
+      Align(out);
+      if (!allAdjustments[i].empty())
+      {
+        records[i].adjustmentOffset = static_cast<std::uint32_t>(out.size());
+        for (auto& adjustment : allAdjustments[i])
+          Append(out, adjustment);
+        Align(out);
+      }
+    }
+    auto* h = reinterpret_cast<ttr::ManifestHeaderV2*>(out.data());
+    std::memcpy(h->magic, ttr::kManifestMagic, 8);
+    h->formatVersion = ttr::kManifestVersion;
+    h->headerSize = sizeof(*h);
+    h->totalSize = static_cast<std::uint32_t>(out.size());
+    h->sequence = root["sequence"].get<std::uint64_t>();
+    h->recordCount = static_cast<std::uint32_t>(records.size());
+    h->recordTableOffset = sizeof(*h);
+    std::memcpy(out.data() + h->recordTableOffset, records.data(),
+                records.size() * sizeof(records[0]));
+    ttr::ManifestView view;
+    std::string error;
+    if (!ttr::ParseManifest(out, view, error))
+      throw std::runtime_error(error);
+    std::ofstream file(argv[2], std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<const char*>(out.data()), out.size());
+    if (!file)
+      throw std::runtime_error("write failed");
+    return 0;
+  }
+  catch (const std::exception& e)
+  {
+    std::cerr << "manifestc: " << e.what() << "\n";
+    return 1;
+  }
+}

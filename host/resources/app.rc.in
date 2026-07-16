@@ -1,11 +1,12 @@
 #include <windows.h>
 102 RCDATA "@TTR_PUBLIC_KEY_PATH@"
+@TTR_BASELINE_RESOURCE_LINES@
 201 ICON "@TTR_ICON_ENABLED_PATH@"
 202 ICON "@TTR_ICON_DISABLED_PATH@"
 203 ICON "@TTR_ICON_WARNING_PATH@"
 1 VERSIONINFO
- FILEVERSION 0,1,0,0
- PRODUCTVERSION 0,1,0,0
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
  FILEFLAGSMASK 0x3fL
  FILEOS 0x40004L
  FILETYPE 0x1L
@@ -16,10 +17,11 @@ BEGIN
   BEGIN
    VALUE "CompanyName", "Taskbar Thumbnail Reorder contributors\0"
    VALUE "FileDescription", "Taskbar Thumbnail Reorder\0"
-   VALUE "FileVersion", "0.1.0\0"
+   VALUE "FileVersion", "@PROJECT_VERSION@\0"
    VALUE "LegalCopyright", "GPL-3.0-only\0"
    VALUE "OriginalFilename", "TaskbarThumbnailReorder.exe\0"
    VALUE "ProductName", "Taskbar Thumbnail Reorder\0"
+   VALUE "ProductVersion", "@PROJECT_VERSION@\0"
   END
  END
  BLOCK "VarFileInfo" BEGIN VALUE "Translation", 0x409, 1200 END

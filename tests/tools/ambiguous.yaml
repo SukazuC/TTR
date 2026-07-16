@@ -1,0 +1,7 @@
+version: 1
+modules:
+  ttr_compat_fixture.dll:
+    - id: FixtureRequired
+      kind: function
+      optional: false
+      names: ["FixtureRequired", "FixtureSecond"]

@@ -3,18 +3,43 @@
   "configurePresets": [
     {
       "name": "vs2022-x64",
-      "displayName": "Visual Studio 2022 x64",
+      "displayName": "Visual Studio 2022 x64 /WX",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/out/build/vs2022-x64",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+        "TTR_WARNINGS_AS_ERRORS": "ON",
+        "TTR_PUBLIC_KEY_FILE": "${sourceDir}/compat/qualified/manifest-public-key.bin",
+        "TTR_BASELINE_MANIFEST_FILE": "${sourceDir}/compat/qualified/compat.bin",
+        "TTR_BASELINE_SIGNATURE_FILE": "${sourceDir}/compat/qualified/compat.sig",
+        "TTR_ALLOW_EMPTY_BASELINE": "OFF"
+      }
+    },
+    {
+      "name": "vs2022-x64-asan",
+      "inherits": "vs2022-x64",
+      "displayName": "Visual Studio 2022 x64 AddressSanitizer",
+      "binaryDir": "${sourceDir}/out/build/vs2022-x64-asan",
+      "cacheVariables": { "TTR_ENABLE_ASAN": "ON" }
+    },
+    {
+      "name": "vs2022-x64-analyze",
+      "inherits": "vs2022-x64",
+      "displayName": "Visual Studio 2022 x64 static analysis",
+      "binaryDir": "${sourceDir}/out/build/vs2022-x64-analyze",
+      "cacheVariables": { "TTR_ENABLE_ANALYZE": "ON" }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "vs2022-x64", "configuration": "Debug" },
-    { "name": "release", "configurePreset": "vs2022-x64", "configuration": "Release" }
+    { "name": "release", "configurePreset": "vs2022-x64", "configuration": "Release" },
+    { "name": "asan", "configurePreset": "vs2022-x64-asan", "configuration": "RelWithDebInfo" },
+    { "name": "analyze", "configurePreset": "vs2022-x64-analyze", "configuration": "Release" }
   ],
   "testPresets": [
-    { "name": "debug", "configurePreset": "vs2022-x64", "configuration": "Debug", "output": { "outputOnFailure": true } }
+    { "name": "debug", "configurePreset": "vs2022-x64", "configuration": "Debug", "output": { "outputOnFailure": true } },
+    { "name": "release", "configurePreset": "vs2022-x64", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "asan", "configurePreset": "vs2022-x64-asan", "configuration": "RelWithDebInfo", "output": { "outputOnFailure": true } }
   ]
 }
