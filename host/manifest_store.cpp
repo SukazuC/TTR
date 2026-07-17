@@ -48,6 +48,7 @@ bool EmbeddedResource(const WORD id, std::span<const std::byte>& bytes) noexcept
 bool ManifestStore::Load(std::string& error) noexcept
 {
   bytes_ = EmptyManifestBytes();
+  sequence_ = 0;
   const auto base = ApplicationDataDirectory() + L"\\compat\\compat";
   std::span<const std::byte> publicKey, embeddedManifest, embeddedSignature;
   if (!EmbeddedResource(102, publicKey))
@@ -80,6 +81,7 @@ bool ManifestStore::Load(std::string& error) noexcept
                             error))
     return false;
   bytes_ = std::move(selection.bytes);
+  sequence_ = selection.sequence;
   return ParseManifest(bytes_, view_, error);
 }
 

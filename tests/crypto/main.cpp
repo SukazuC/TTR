@@ -1,5 +1,6 @@
 #include "crypto.h"
 #include "manifest_selection.h"
+#include "manifest_install.h"
 #include "sha256.h"
 #include "ttr_manifest.h"
 
@@ -7,6 +8,8 @@
 #include <bcrypt.h>
 
 #include <array>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <span>
 #include <string>
@@ -87,6 +90,30 @@ std::vector<std::byte> Manifest(const std::uint64_t sequence)
   return bytes;
 }
 
+bool SaveSequence(const std::uint64_t sequence, void* context)
+{
+  *static_cast<std::uint64_t*>(context) = sequence;
+  return true;
+}
+
+bool RejectSequence(std::uint64_t, void*)
+{
+  return false;
+}
+
+std::vector<std::byte> Read(const std::filesystem::path& path)
+{
+  std::ifstream file(path, std::ios::binary);
+  file.seekg(0, std::ios::end);
+  const auto size = file.tellg();
+  file.seekg(0);
+  if (size <= 0)
+    return {};
+  std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+  file.read(reinterpret_cast<char*>(bytes.data()), size);
+  return file ? bytes : std::vector<std::byte>{};
+}
+
 } // namespace
 
 int main()
@@ -155,5 +182,68 @@ int main()
                                   selection, error) &&
             !selection.externalSelected && selection.bytes == embedded,
         "invalid external pair falls back to embedded baseline");
+
+  const auto scratch = std::filesystem::temp_directory_path() /
+                       (L"ttr-manifest-install-" + std::to_wstring(GetCurrentProcessId()));
+  std::error_code filesystemError;
+  std::filesystem::remove_all(scratch, filesystemError);
+  std::uint64_t savedSequence = 0, installedSequence = 0;
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, newer, newerSignature, scratch, 10,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::Installed &&
+            savedSequence == 11 && installedSequence == 11 &&
+            Read(scratch / L"compat.bin") == newer,
+        "newer signed manifest installed and reloadable");
+  const auto installedBytes = Read(scratch / L"compat.bin");
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, newer, newerSignature, scratch, 11,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::NotNewer,
+        "same manifest sequence rejected");
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, older, olderSignature, scratch, 11,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::NotNewer,
+        "older manifest sequence rejected");
+  auto tamperedNewer = newer;
+  tamperedNewer.back() ^= std::byte{1};
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, tamperedNewer, newerSignature, scratch, 11,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::InvalidSignature &&
+            Read(scratch / L"compat.bin") == installedBytes,
+        "tampered download leaves installed manifest unchanged");
+  auto tamperedNewerSignature = newerSignature;
+  tamperedNewerSignature.front() ^= std::byte{1};
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, newer, tamperedNewerSignature, scratch, 11,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::InvalidSignature &&
+            Read(scratch / L"compat.bin") == installedBytes,
+        "tampered signature leaves installed manifest unchanged");
+  auto newest = Manifest(12);
+  auto newestSignature = Sign(pair.key, newest);
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, newest, newestSignature, scratch, 11,
+                                       RejectSequence, nullptr, installedSequence, error) ==
+            ttr::ManifestInstallResult::SequenceSaveFailure &&
+            Read(scratch / L"compat.bin") == installedBytes,
+        "failed highest-sequence save rolls installation back");
+  Check(ttr::InstallSignedManifestPair(pair.publicBlob, older, olderSignature, scratch, 0,
+                                       SaveSequence, &savedSequence, installedSequence, error) ==
+            ttr::ManifestInstallResult::NotNewer,
+        "installed external sequence cannot be rolled back");
+
+  std::vector<ttr::ModuleIdentityV1> marker;
+  std::array<ttr::ModuleIdentityV1, 1> identity{};
+  identity[0].timeDateStamp = 1;
+  Check(ttr::MarkManifestIdentityChecked(identity, marker),
+        "unsupported identity starts automatic check once");
+  Check(!ttr::MarkManifestIdentityChecked(identity, marker),
+        "same unsupported identity does not repeat automatic check");
+  identity[0].timeDateStamp = 2;
+  Check(ttr::MarkManifestIdentityChecked(identity, marker),
+        "new module identity permits one automatic check");
+  Check(ttr::ShouldRetryCompatibilityAfterManifestReload(1, 2, true),
+        "successful newer manifest reload causes compatibility retry when enabled");
+  Check(!ttr::ShouldRetryCompatibilityAfterManifestReload(2, 2, true) &&
+            !ttr::ShouldRetryCompatibilityAfterManifestReload(1, 2, false),
+        "compatibility retry requires both a newer sequence and enabled state");
+  std::filesystem::remove_all(scratch, filesystemError);
   return failures ? 1 : 0;
 }

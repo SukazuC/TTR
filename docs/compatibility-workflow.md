@@ -14,6 +14,17 @@
 8. Run `--diagnose-offline --manifest ... --signature ...`; it must report an exact record match and
    validate every symbol RVA.
 9. Complete the separate manual qualification before marking or publishing a record as tested.
+10. Increment the combined manifest sequence, retain older safe records, sign the pair, and publish
+    only `compat.bin`, `compat.sig`, checksums, and reviewed record JSON to the public compatibility
+    repository. Never publish PDBs, symbol caches, private keys, dumps, or build output.
+11. Download the published raw files again, compare their hashes byte-for-byte with the qualified pair,
+    and verify the signature before treating the feed update as complete.
+
+The official endpoint is
+`https://raw.githubusercontent.com/SukazuC/TTR-compat/main/compat.bin`; its sibling signature is
+`compat.sig`. Runtime installation accepts a sequence only when it is greater than the embedded,
+selected external, valid backup, and highest previously installed sequences. Final-location
+verification and highest-sequence persistence must succeed or the previous valid pair is restored.
 
 If public symbols omit a required stable symbol, report the exact ID and stop. Pattern scanning, guessed
 offsets, and build-number-only reuse are not fallbacks.

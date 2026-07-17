@@ -3,6 +3,7 @@
 #include "crypto.h"
 #include "ttr_manifest.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace ttr
@@ -61,6 +62,22 @@ bool SelectSignedManifest(const std::span<const std::byte> publicKey,
 
   if (result.bytes.empty())
     result.bytes = EmptyManifestBytes();
+  result.sequence = sequence;
   return true;
+}
+bool MarkManifestIdentityChecked(const std::span<const ModuleIdentityV1> identities,
+                                 std::vector<ModuleIdentityV1>& marker) noexcept
+{
+  if (identities.size() == marker.size() &&
+      std::equal(identities.begin(), identities.end(), marker.begin(), ModuleIdentityEqual))
+    return false;
+  marker.assign(identities.begin(), identities.end());
+  return true;
+}
+bool ShouldRetryCompatibilityAfterManifestReload(const std::uint64_t previousSequence,
+                                                 const std::uint64_t currentSequence,
+                                                 const bool enabled) noexcept
+{
+  return enabled && currentSequence > previousSequence;
 }
 } // namespace ttr

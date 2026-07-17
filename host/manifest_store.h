@@ -14,11 +14,16 @@ public:
   {
     return view_;
   }
+  std::uint64_t Sequence() const noexcept
+  {
+    return sequence_;
+  }
   std::span<const std::byte> SelectedRecordBlob(const std::vector<PeIdentity>&,
                                                 std::uint64_t&) const noexcept;
 
 private:
   std::vector<std::byte> bytes_;
   ManifestView view_{};
+  std::uint64_t sequence_{};
 };
 } // namespace ttr::host

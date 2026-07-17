@@ -3,6 +3,7 @@
 #include "cleanup.h"
 #include "diagnostics.h"
 #include "manifest_update.h"
+#include "manifest_selection.h"
 #include "ttr_version.h"
 #include <algorithm>
 #include <new>
@@ -172,17 +173,63 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     if (updateWorker_.joinable())
       updateWorker_.join();
     const auto result = static_cast<ManifestUpdateResult>(wParam);
-    const wchar_t* text = result == ManifestUpdateResult::Installed
-                              ? L"A verified compatibility manifest was installed. Toggle the "
-                                L"feature off and on to apply it."
-                          : result == ManifestUpdateResult::NotConfigured
-                              ? L"No compatibility update endpoint is configured in this build."
-                          : result == ManifestUpdateResult::Cancelled
-                              ? L"The compatibility update was cancelled."
-                              : L"No newer valid signed compatibility update could be installed.";
-    MessageBoxW(
-        window_, text, L"Taskbar Thumbnail Reorder",
-        MB_OK | (result == ManifestUpdateResult::Installed ? MB_ICONINFORMATION : MB_ICONWARNING));
+    const bool manual = lParam != 0;
+    const wchar_t* text = nullptr;
+    bool information = false;
+    if (result == ManifestUpdateResult::Installed)
+    {
+      const auto previousSequence = manifest_.Sequence();
+      std::string error;
+      if (!manifest_.Load(error) || manifest_.Sequence() <= previousSequence)
+      {
+        lastError_ = L"The installed compatibility update could not be reloaded safely.";
+        SetState(HostState::Faulted);
+        text = lastError_.c_str();
+      }
+      else
+      {
+        if (ShouldRetryCompatibilityAfterManifestReload(previousSequence, manifest_.Sequence(),
+                                                        settings_.enabled))
+          AttachIfPossible();
+        else
+          SetState(HostState::Disabled);
+        if (state_ == HostState::Active)
+        {
+          lastError_ = L"Compatibility update installed and activated.";
+          text = lastError_.c_str();
+          information = true;
+        }
+        else if (state_ == HostState::Unsupported)
+        {
+          lastError_ = L"Compatibility update installed, but this build is still unsupported.";
+          text = lastError_.c_str();
+        }
+        else
+        {
+          lastError_ = L"Compatibility update installed. It will be used when the feature is enabled.";
+          text = lastError_.c_str();
+          information = true;
+        }
+      }
+    }
+    else
+    {
+      text = result == ManifestUpdateResult::NotConfigured
+                 ? L"Compatibility update endpoint not configured."
+             : result == ManifestUpdateResult::Cancelled
+                 ? L"The compatibility update was cancelled."
+             : result == ManifestUpdateResult::NoNewer
+                 ? L"No newer compatibility update is available."
+             : result == ManifestUpdateResult::InvalidSignature
+                 ? L"The downloaded compatibility update has an invalid signature."
+             : result == ManifestUpdateResult::NetworkUnavailable
+                 ? L"The compatibility update endpoint is unavailable."
+                 : L"The compatibility update could not be installed safely.";
+      lastError_ = text;
+    }
+    if (manual)
+      MessageBoxW(window_, text, L"Taskbar Thumbnail Reorder",
+                  MB_OK | (information ? MB_ICONINFORMATION : MB_ICONWARNING));
     return 0;
   }
   if (message == WM_APP + 2)
@@ -273,14 +320,7 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
       break;
     }
     case IdUpdate:
-      if (!updateInProgress_)
-      {
-        if (updateWorker_.joinable())
-          updateWorker_.join();
-        updateInProgress_ = true;
-        lastError_ = L"Compatibility update is in progress.";
-        updateWorker_ = std::jthread(RunCompatibilityUpdate, window_);
-      }
+      StartCompatibilityUpdate(true);
       break;
     case IdDiagnostics: {
       std::wstring error;
@@ -369,6 +409,8 @@ void App::SetState(HostState value) noexcept
 }
 std::wstring App::StateText() const
 {
+  if (updateInProgress_)
+    return L"Checking compatibility update...";
   switch (state_)
   {
   case HostState::Active:
@@ -423,6 +465,15 @@ void App::AttachIfPossible() noexcept
     lastError_ = L"Compatibility update required for this Windows taskbar version. No changes were "
                  L"made to Explorer.";
     SetState(HostState::Unsupported);
+    if (settings_.checkManifestUpdates && *TTR_MANIFEST_URL_W)
+    {
+      std::vector<ModuleIdentityV1> identities;
+      identities.reserve(explorer_.modules.size());
+      for (const auto& module : explorer_.modules)
+        identities.push_back(module.identity);
+      if (MarkManifestIdentityChecked(identities, automaticallyCheckedIdentity_))
+        StartCompatibilityUpdate(false);
+    }
     return;
   }
   SetState(HostState::Attaching);
@@ -443,6 +494,16 @@ void App::AttachIfPossible() noexcept
   }
   SetState(HostState::Active);
   SetTimer(window_, kStableTimer, 30000, nullptr);
+}
+void App::StartCompatibilityUpdate(const bool manual) noexcept
+{
+  if (updateInProgress_)
+    return;
+  if (updateWorker_.joinable())
+    updateWorker_.join();
+  updateInProgress_ = true;
+  lastError_ = L"Checking compatibility update...";
+  updateWorker_ = std::jthread(RunCompatibilityUpdate, window_, manifest_.Sequence(), manual);
 }
 void App::ScheduleExplorerRetry() noexcept
 {
@@ -481,13 +542,13 @@ void App::ShowMenu(POINT point) noexcept
   auto status = L"Status: " + StateText();
   AppendMenuW(menu, MF_STRING | MF_DISABLED, IdStatus, status.c_str());
   AppendMenuW(menu,
-              MF_STRING | (settings_.enabled ? MF_CHECKED : 0) |
-                  (state_ == HostState::Unsupported ? MF_DISABLED : 0),
+              MF_STRING | (settings_.enabled ? MF_CHECKED : 0),
               IdEnable, L"Enable thumbnail reordering");
   AppendMenuW(menu, MF_STRING | (IsAutostartEnabled() ? MF_CHECKED : 0), IdAutostart,
               L"Start with Windows");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, IdUpdate, L"Check compatibility update");
+  AppendMenuW(menu, MF_STRING | (updateInProgress_ ? MF_DISABLED : 0), IdUpdate,
+              L"Check compatibility update");
   AppendMenuW(menu, MF_STRING, IdDiagnostics, L"Export diagnostics...");
   AppendMenuW(menu, MF_STRING, IdAbout, L"About");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);

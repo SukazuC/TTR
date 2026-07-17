@@ -9,6 +9,11 @@ compatibility baseline are embedded as read-only resources. A valid external sig
 override the baseline only when its sequence is strictly newer. Unknown taskbar builds remain
 unsupported and do not reach the Explorer loading path.
 
+Official v0.1.1 builds also check the public signed compatibility feed once when an exact taskbar
+identity is unknown. A newer manifest is verified, installed atomically, reloaded, and applied without
+restarting TTR. Network failures, invalid signatures, and non-increasing sequences leave the last valid
+manifest untouched. The feed contains public compatibility data only; the signing key is never hosted.
+
 ## Build and test
 
 Requirements: Visual Studio Community 2022 17.14 with Desktop C++, Windows SDK 10.0.26100.0,
@@ -62,7 +67,9 @@ Compatibility generation is developer-side, exact-PDB, and read-only. Generated 
 `out/qualification/unqualified` until the separate [manual qualification](docs/MANUAL-QUALIFICATION.md)
 passes. Record `2620013101` completed focused live qualification on July 16, 2026; see its
 [qualification record](docs/qualification/2620013101.md). A symbol match alone is not behavioral
-compatibility, and other module identities remain fail closed.
+compatibility. Records `2620013101` and `2620013102` are qualified; see the
+[current qualification record](docs/qualification/2620013102.md). Other module identities remain fail
+closed.
 
 Licensed GPL-3.0-only. Behavior is based on Michael Maltsev's GPL Windhawk
 `taskbar-thumbnail-reorder` mod; see [third-party notices](THIRD_PARTY_NOTICES.md).

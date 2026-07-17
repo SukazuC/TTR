@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace ttr::host
 {
@@ -38,6 +39,7 @@ private:
   void ShowMenu(POINT) noexcept;
   void ToggleEnabled() noexcept;
   void AttachIfPossible() noexcept;
+  void StartCompatibilityUpdate(bool manual) noexcept;
   void SetState(HostState) noexcept;
   void ScheduleExplorerRetry() noexcept;
   std::wstring StateText() const;
@@ -63,5 +65,6 @@ private:
   ULONGLONG crashWindowStart_{};
   std::jthread updateWorker_;
   bool updateInProgress_{};
+  std::vector<ModuleIdentityV1> automaticallyCheckedIdentity_;
 };
 } // namespace ttr::host

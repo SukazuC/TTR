@@ -1,23 +1,28 @@
 cmake_minimum_required(VERSION 3.28)
-project(TaskbarThumbnailReorder VERSION 0.1.0 LANGUAGES C CXX RC)
+project(TaskbarThumbnailReorder VERSION 0.1.1 LANGUAGES C CXX RC)
 
 option(TTR_WARNINGS_AS_ERRORS "Treat first-party warnings as errors" ON)
 option(TTR_ENABLE_ANALYZE "Enable MSVC native static analysis" OFF)
 option(TTR_ENABLE_ASAN "Enable AddressSanitizer for offline code" OFF)
 option(TTR_ALLOW_EMPTY_BASELINE "Explicitly build without a signed compatibility baseline" OFF)
+option(TTR_ALLOW_NO_UPDATE_ENDPOINT "Explicitly build without a compatibility update endpoint" OFF)
 set(TTR_PUBLIC_KEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/manifest-public-key.bin"
     CACHE FILEPATH "ECDSA P-256 public key blob embedded in the host")
 set(TTR_BASELINE_MANIFEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/compat.bin"
     CACHE FILEPATH "Signed compatibility baseline embedded in the host")
 set(TTR_BASELINE_SIGNATURE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/compat/qualified/compat.sig"
     CACHE FILEPATH "Signature for the embedded compatibility baseline")
-set(TTR_MANIFEST_URL "" CACHE STRING "Optional HTTPS compatibility-manifest URL")
+set(TTR_MANIFEST_URL "https://raw.githubusercontent.com/SukazuC/TTR-compat/main/compat.bin"
+    CACHE STRING "HTTPS compatibility-manifest URL")
 
 if(NOT WIN32)
   message(FATAL_ERROR "Taskbar Thumbnail Reorder v1 supports only Windows")
 endif()
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "Taskbar Thumbnail Reorder v1 supports only x64 Windows")
+endif()
+if(NOT TTR_MANIFEST_URL AND NOT TTR_ALLOW_NO_UPDATE_ENDPOINT)
+  message(FATAL_ERROR "Official builds require TTR_MANIFEST_URL; set TTR_ALLOW_NO_UPDATE_ENDPOINT=ON only for development")
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -93,6 +98,7 @@ configure_file(host/resources/app.rc.in generated/app.rc @ONLY)
 
 add_library(ttr_common STATIC
   common/crypto.cpp
+  common/manifest_install.cpp
   common/manifest.cpp
   common/manifest_selection.cpp
   common/pe_identity.cpp

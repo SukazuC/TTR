@@ -2,6 +2,7 @@
 
 #include "autostart.h"
 #include "crypto.h"
+#include "manifest_install.h"
 #include "ttr_manifest.h"
 #include "ttr_version.h"
 
@@ -9,8 +10,6 @@
 #include <winhttp.h>
 
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <span>
 #include <string>
 #include <vector>
@@ -123,31 +122,6 @@ bool EmbeddedPublicKey(std::span<const std::byte>& key)
   return true;
 }
 
-bool WriteFileFully(const std::wstring& path, const std::span<const std::byte> bytes)
-{
-  const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                  FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (file == INVALID_HANDLE_VALUE)
-    return false;
-  std::size_t completed = 0;
-  bool valid = true;
-  while (completed < bytes.size())
-  {
-    const DWORD request =
-        static_cast<DWORD>(std::min<std::size_t>(bytes.size() - completed, MAXDWORD));
-    DWORD written = 0;
-    if (!WriteFile(file, bytes.data() + completed, request, &written, nullptr) || !written)
-    {
-      valid = false;
-      break;
-    }
-    completed += written;
-  }
-  valid = valid && FlushFileBuffers(file) != FALSE;
-  CloseHandle(file);
-  return valid;
-}
-
 std::uint64_t HighestInstalledSequence()
 {
   HKEY key{};
@@ -178,64 +152,30 @@ bool SaveHighestInstalledSequence(const std::uint64_t sequence)
   return status == ERROR_SUCCESS;
 }
 
-bool InstallPair(const std::vector<std::byte>& manifest, const std::vector<std::byte>& signature,
-                 const std::uint64_t sequence)
+bool SaveSequence(const std::uint64_t sequence, void*)
 {
-  const auto directory = ApplicationDataDirectory() + L"\\compat";
-  std::error_code error;
-  std::filesystem::create_directories(directory, error);
-  if (error)
-    return false;
-  const auto manifestPath = directory + L"\\compat.bin";
-  const auto signaturePath = directory + L"\\compat.sig";
-  const auto manifestNew = manifestPath + L".new";
-  const auto signatureNew = signaturePath + L".new";
-  const auto manifestBackup = manifestPath + L".bak";
-  const auto signatureBackup = signaturePath + L".bak";
-  DeleteFileW(manifestNew.c_str());
-  DeleteFileW(signatureNew.c_str());
-  if (!WriteFileFully(manifestNew, manifest) || !WriteFileFully(signatureNew, signature))
-  {
-    DeleteFileW(manifestNew.c_str());
-    DeleteFileW(signatureNew.c_str());
-    return false;
-  }
-  if (std::filesystem::exists(manifestPath, error) && std::filesystem::exists(signaturePath, error))
-  {
-    CopyFileW(manifestPath.c_str(), manifestBackup.c_str(), FALSE);
-    CopyFileW(signaturePath.c_str(), signatureBackup.c_str(), FALSE);
-  }
-  const bool replacedManifest =
-      MoveFileExW(manifestNew.c_str(), manifestPath.c_str(),
-                  MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
-  const bool replacedSignature =
-      replacedManifest && MoveFileExW(signatureNew.c_str(), signaturePath.c_str(),
-                                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
-  if (!replacedSignature || !SaveHighestInstalledSequence(sequence))
-  {
-    DeleteFileW(manifestNew.c_str());
-    DeleteFileW(signatureNew.c_str());
-    if (std::filesystem::exists(manifestBackup, error) &&
-        std::filesystem::exists(signatureBackup, error))
-    {
-      CopyFileW(manifestBackup.c_str(), manifestPath.c_str(), FALSE);
-      CopyFileW(signatureBackup.c_str(), signaturePath.c_str(), FALSE);
-    }
-    else
-    {
-      DeleteFileW(manifestPath.c_str());
-      DeleteFileW(signaturePath.c_str());
-    }
-    return false;
-  }
-  return true;
+  return SaveHighestInstalledSequence(sequence);
+}
+
+std::wstring SignatureUrl(std::wstring url)
+{
+  const auto query = url.find_first_of(L"?#");
+  const auto end = query == std::wstring::npos ? url.size() : query;
+  const auto slash = url.rfind(L'/', end);
+  const auto dot = url.rfind(L'.', end);
+  if (dot != std::wstring::npos && (slash == std::wstring::npos || dot > slash))
+    url.replace(dot, end - dot, L".sig");
+  else
+    url.insert(end, L".sig");
+  return url;
 }
 
 } // namespace
 
-void RunCompatibilityUpdate(const std::stop_token stopToken, const HWND owner) noexcept
+void RunCompatibilityUpdate(const std::stop_token stopToken, const HWND owner,
+                            const std::uint64_t minimumSequence, const bool manual) noexcept
 {
-  ManifestUpdateResult result = ManifestUpdateResult::Rejected;
+  ManifestUpdateResult result = ManifestUpdateResult::InstallFailed;
   if (!*TTR_MANIFEST_URL_W)
   {
     result = ManifestUpdateResult::NotConfigured;
@@ -245,24 +185,40 @@ void RunCompatibilityUpdate(const std::stop_token stopToken, const HWND owner) n
     std::vector<std::byte> manifest;
     std::vector<std::byte> signature;
     std::span<const std::byte> publicKey;
-    ManifestView view;
     std::string error;
     const std::wstring url = TTR_MANIFEST_URL_W;
-    const bool valid =
-        Download(url, kMaxManifestBytes, stopToken, manifest) &&
-        Download(url + L".sig", 256, stopToken, signature) && EmbeddedPublicKey(publicKey) &&
-        VerifyEcdsaP256(publicKey, manifest, signature, error) &&
-        ParseManifest(manifest, view, error) && view.header->sequence > HighestInstalledSequence();
-    if (stopToken.stop_requested())
+    if (!Download(url, kMaxManifestBytes, stopToken, manifest) ||
+        !Download(SignatureUrl(url), 256, stopToken, signature))
+      result = stopToken.stop_requested() ? ManifestUpdateResult::Cancelled
+                                          : ManifestUpdateResult::NetworkUnavailable;
+    else if (!EmbeddedPublicKey(publicKey))
+      result = ManifestUpdateResult::InstallFailed;
+    else
     {
-      result = ManifestUpdateResult::Cancelled;
-    }
-    else if (valid && InstallPair(manifest, signature, view.header->sequence))
-    {
-      result = ManifestUpdateResult::Installed;
+      std::uint64_t installedSequence = 0;
+      const auto floor = std::max(minimumSequence, HighestInstalledSequence());
+      const auto installed = InstallSignedManifestPair(
+          publicKey, manifest, signature, ApplicationDataDirectory() + L"\\compat", floor,
+          SaveSequence, nullptr, installedSequence, error);
+      switch (installed)
+      {
+      case ManifestInstallResult::Installed:
+        result = ManifestUpdateResult::Installed;
+        break;
+      case ManifestInstallResult::NotNewer:
+        result = ManifestUpdateResult::NoNewer;
+        break;
+      case ManifestInstallResult::InvalidSignature:
+      case ManifestInstallResult::InvalidManifest:
+        result = ManifestUpdateResult::InvalidSignature;
+        break;
+      default:
+        result = ManifestUpdateResult::InstallFailed;
+        break;
+      }
     }
   }
-  PostMessageW(owner, kUpdateCompleteMessage, static_cast<WPARAM>(result), 0);
+  PostMessageW(owner, kUpdateCompleteMessage, static_cast<WPARAM>(result), manual ? 1 : 0);
 }
 
 } // namespace ttr::host
