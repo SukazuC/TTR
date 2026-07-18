@@ -30,6 +30,7 @@ class App
 public:
   int Run(HINSTANCE, int);
   static int RunStartupSmoke(HINSTANCE) noexcept;
+  static int RunSessionEndSmoke(HINSTANCE) noexcept;
   static constexpr wchar_t kWindowClass[] = L"TaskbarThumbnailReorder.Host.v1";
 
 private:
@@ -38,6 +39,8 @@ private:
   LRESULT HandleMessage(UINT, WPARAM, LPARAM) noexcept;
   void ShowMenu(POINT) noexcept;
   void ToggleEnabled() noexcept;
+  void BeginSessionShutdown() noexcept;
+  void CancelSessionShutdown() noexcept;
   void AttachIfPossible() noexcept;
   void StartCompatibilityUpdate(bool manual) noexcept;
   void SetState(HostState) noexcept;
@@ -65,6 +68,8 @@ private:
   ULONGLONG crashWindowStart_{};
   std::jthread updateWorker_;
   bool updateInProgress_{};
+  bool sessionEnding_{};
+  bool sessionDetachComplete_{};
   std::vector<ModuleIdentityV1> automaticallyCheckedIdentity_;
 };
 } // namespace ttr::host

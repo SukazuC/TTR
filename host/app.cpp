@@ -135,6 +135,43 @@ int App::RunStartupSmoke(HINSTANCE instance) noexcept
   return initialized && posted && dispatched ? 0 : 3;
 }
 
+int App::RunSessionEndSmoke(HINSTANCE instance) noexcept
+{
+  App app;
+  app.instance_ = instance;
+  app.settings_.enabled = false;
+  constexpr wchar_t smokeClass[] = L"TaskbarThumbnailReorder.HostSessionEndSmoke.v1";
+  WNDCLASSEXW wc{sizeof(wc)};
+  wc.lpfnWndProc = WindowProc;
+  wc.hInstance = instance;
+  wc.lpszClassName = smokeClass;
+  if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    return 1;
+  const HWND window = CreateWindowExW(0, smokeClass, L"", WS_OVERLAPPED, 0, 0, 0, 0, nullptr,
+                                      nullptr, instance, &app);
+  if (!window)
+  {
+    UnregisterClassW(smokeClass, instance);
+    return 2;
+  }
+  app.window_ = window;
+  const bool initialized = app.window_ == window &&
+                           reinterpret_cast<App*>(GetWindowLongPtrW(window, GWLP_USERDATA)) == &app;
+  const bool firstQuery = SendMessageW(window, WM_QUERYENDSESSION, 0, 0) == TRUE;
+  const bool secondQuery = SendMessageW(window, WM_QUERYENDSESSION, 0, 0) == TRUE;
+  SendMessageW(window, WM_ENDSESSION, FALSE, 0);
+  const bool cancelled = !app.sessionEnding_ && IsWindow(window);
+  const bool finalQuery = SendMessageW(window, WM_QUERYENDSESSION, 0, 0) == TRUE;
+  SendMessageW(window, WM_ENDSESSION, TRUE, 0);
+  const bool destroyed = !IsWindow(window);
+  MSG message{};
+  while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+  {
+  }
+  UnregisterClassW(smokeClass, instance);
+  return initialized && firstQuery && secondQuery && cancelled && finalQuery && destroyed ? 0 : 3;
+}
+
 LRESULT CALLBACK App::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
   if (message == WM_NCCREATE)
@@ -144,8 +181,16 @@ LRESULT CALLBACK App::WindowProc(HWND window, UINT message, WPARAM wParam, LPARA
     return TRUE;
   }
   auto* self = reinterpret_cast<App*>(GetWindowLongPtrW(window, GWLP_USERDATA));
-  return self ? self->HandleMessage(message, wParam, lParam)
-              : DefWindowProcW(window, message, wParam, lParam);
+  if (!self)
+    return DefWindowProcW(window, message, wParam, lParam);
+  const LRESULT result = self->HandleMessage(message, wParam, lParam);
+  if (message == WM_NCDESTROY)
+  {
+    SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+    if (self->window_ == window)
+      self->window_ = nullptr;
+  }
+  return result;
 }
 void CALLBACK App::ExplorerExited(void* context, BOOLEAN) noexcept
 {
@@ -156,8 +201,35 @@ void CALLBACK App::ExplorerExited(void* context, BOOLEAN) noexcept
 
 LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+  if (message == WM_QUERYENDSESSION)
+  {
+    BeginSessionShutdown();
+    return TRUE;
+  }
+  if (message == WM_ENDSESSION)
+  {
+    if (!wParam)
+    {
+      CancelSessionShutdown();
+      return 0;
+    }
+    BeginSessionShutdown();
+    if (!sessionDetachComplete_)
+    {
+      sessionDetachComplete_ = loader_.Detach();
+      if (sessionDetachComplete_)
+        CloseExplorerInfo(explorer_);
+    }
+    if (updateWorker_.joinable())
+      updateWorker_.request_stop();
+    SetState(HostState::Exiting);
+    DestroyWindow(window_);
+    return 0;
+  }
   if (message == replaceMessage_)
   {
+    if (sessionEnding_)
+      return 0;
     if (loader_.Detach())
     {
       SetState(HostState::Exiting);
@@ -172,6 +244,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     updateInProgress_ = false;
     if (updateWorker_.joinable())
       updateWorker_.join();
+    if (sessionEnding_)
+      return 0;
     const auto result = static_cast<ManifestUpdateResult>(wParam);
     const bool manual = lParam != 0;
     const wchar_t* text = nullptr;
@@ -234,6 +308,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
   }
   if (message == WM_APP + 2)
   {
+    if (sessionEnding_)
+      return 0;
     if (static_cast<std::uint64_t>(lParam) != explorerGeneration_)
       return 0;
     if (explorerWait_)
@@ -267,6 +343,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
   }
   if (message == taskbarCreated_)
   {
+    if (sessionEnding_)
+      return 0;
     tray_.Remove();
     tray_.Add(window_, trayMessage_,
               state_ == HostState::Active        ? TrayState::Active
@@ -286,6 +364,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
   }
   if (message == activateMessage_)
   {
+    if (sessionEnding_)
+      return 0;
     POINT point{};
     GetCursorPos(&point);
     ShowMenu(point);
@@ -293,6 +373,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
   }
   if (message == trayMessage_)
   {
+    if (sessionEnding_)
+      return 0;
     auto event = LOWORD(lParam);
     if (event == WM_CONTEXTMENU || event == NIN_SELECT || event == WM_LBUTTONUP)
     {
@@ -307,6 +389,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
   switch (message)
   {
   case WM_COMMAND:
+    if (sessionEnding_)
+      return 0;
     switch (LOWORD(wParam))
     {
     case IdEnable:
@@ -375,6 +459,8 @@ LRESULT App::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     return 0;
   case WM_TIMER:
+    if (sessionEnding_)
+      return 0;
     if (wParam == kRetryTimer)
     {
       KillTimer(window_, kRetryTimer);
@@ -431,6 +517,8 @@ std::wstring App::StateText() const
 }
 void App::AttachIfPossible() noexcept
 {
+  if (sessionEnding_)
+    return;
   if (explorerWait_)
   {
     UnregisterExplorerWait(explorerWait_);
@@ -497,7 +585,7 @@ void App::AttachIfPossible() noexcept
 }
 void App::StartCompatibilityUpdate(const bool manual) noexcept
 {
-  if (updateInProgress_)
+  if (sessionEnding_ || updateInProgress_)
     return;
   if (updateWorker_.joinable())
     updateWorker_.join();
@@ -507,7 +595,7 @@ void App::StartCompatibilityUpdate(const bool manual) noexcept
 }
 void App::ScheduleExplorerRetry() noexcept
 {
-  if (!settings_.enabled)
+  if (sessionEnding_ || !settings_.enabled)
     return;
   if (retryAttempt_ >= 8)
   {
@@ -522,6 +610,8 @@ void App::ScheduleExplorerRetry() noexcept
 }
 void App::ToggleEnabled() noexcept
 {
+  if (sessionEnding_)
+    return;
   settings_.enabled = !settings_.enabled;
   SaveEnabled(settings_.enabled);
   KillTimer(window_, kRetryTimer);
@@ -535,6 +625,35 @@ void App::ToggleEnabled() noexcept
     SetState(HostState::Disabled);
   else
     SetState(HostState::Faulted);
+}
+void App::BeginSessionShutdown() noexcept
+{
+  if (sessionEnding_)
+    return;
+  sessionEnding_ = true;
+  sessionDetachComplete_ = false;
+  KillTimer(window_, kRetryTimer);
+  KillTimer(window_, kStableTimer);
+  ++explorerGeneration_;
+  if (explorerWait_)
+    UnregisterExplorerWait(explorerWait_);
+  explorerWait_ = nullptr;
+  delete static_cast<WaitContext*>(waitContext_);
+  waitContext_ = nullptr;
+  sessionDetachComplete_ = loader_.Detach();
+  if (sessionDetachComplete_)
+    CloseExplorerInfo(explorer_);
+}
+void App::CancelSessionShutdown() noexcept
+{
+  if (!sessionEnding_)
+    return;
+  sessionEnding_ = false;
+  sessionDetachComplete_ = false;
+  if (settings_.enabled)
+    AttachIfPossible();
+  else
+    SetState(HostState::Disabled);
 }
 void App::ShowMenu(POINT point) noexcept
 {

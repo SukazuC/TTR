@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(TaskbarThumbnailReorder VERSION 0.1.1 LANGUAGES C CXX RC)
+project(TaskbarThumbnailReorder VERSION 0.1.2 LANGUAGES C CXX RC)
 
 option(TTR_WARNINGS_AS_ERRORS "Treat first-party warnings as errors" ON)
 option(TTR_ENABLE_ANALYZE "Enable MSVC native static analysis" OFF)
@@ -257,4 +257,5 @@ if(BUILD_TESTING)
       -EmbeddedBaseline ${TTR_EMBEDDED_BASELINE}
       -Scratch "$<TARGET_FILE_DIR:TaskbarThumbnailReorder>/diagnostic-test-scratch")
   add_test(NAME host_startup_smoke COMMAND TaskbarThumbnailReorder --host-startup-smoke)
+  add_test(NAME host_session_end_smoke COMMAND TaskbarThumbnailReorder --host-session-end-smoke)
 endif()
