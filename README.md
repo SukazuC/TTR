@@ -67,8 +67,8 @@ Compatibility generation is developer-side, exact-PDB, and read-only. Generated 
 `out/qualification/unqualified` until the separate [manual qualification](docs/MANUAL-QUALIFICATION.md)
 passes. Record `2620013101` completed focused live qualification on July 16, 2026; see its
 [qualification record](docs/qualification/2620013101.md). A symbol match alone is not behavioral
-compatibility. Records `2620013101` and `2620013102` are qualified; see the
-[current qualification record](docs/qualification/2620013102.md). Other module identities remain fail
+compatibility. Records `2620013101`, `2620013102`, `2620013103`, and `2620013104` are qualified; see the
+[current qualification record](docs/qualification/2620013104.md). Other module identities remain fail
 closed.
 
 Licensed GPL-3.0-only. Behavior is based on Michael Maltsev's GPL Windhawk

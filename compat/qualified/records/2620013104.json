@@ -1,0 +1,505 @@
+{
+    "sequence":  4,
+    "records":  [
+                    {
+                        "id":  2620013101,
+                        "backend_flags":  [
+                                              "xaml"
+                                          ],
+                        "modules":  [
+                                        {
+                                            "name":  "taskbar.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{47464B00-A0B0-1EDC-BBC2-FFF7404930A7}",
+                                            "size_of_image":  3129344,
+                                            "timestamp":  506094627
+                                        },
+                                        {
+                                            "name":  "taskbar.view.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{4A99B7C5-BAD9-4999-9575-72CC66E11978}",
+                                            "size_of_image":  10051584,
+                                            "timestamp":  1781122501
+                                        }
+                                    ],
+                        "symbols":  [
+                                        {
+                                            "id":  "TaskGroup_GetNumItems",
+                                            "module":  0,
+                                            "rva":  369920,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_GetTBGroupFromGroup",
+                                            "module":  0,
+                                            "rva":  128140,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_GetGroupType",
+                                            "module":  0,
+                                            "rva":  128528,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_IndexOfTaskItem",
+                                            "module":  0,
+                                            "rva":  242784,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_TaskInclusionChanged",
+                                            "module":  0,
+                                            "rva":  370144,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemFilter_IsTaskAllowed",
+                                            "module":  0,
+                                            "rva":  370336,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnail_ConstructorV2",
+                                            "module":  0,
+                                            "rva":  1411008,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskGroup_Thumbnails",
+                                            "module":  0,
+                                            "rva":  715800,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_Size",
+                                            "module":  0,
+                                            "rva":  756568,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_GetAt",
+                                            "module":  0,
+                                            "rva":  776828,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_HandleExtendedUIClick",
+                                            "module":  0,
+                                            "rva":  1348224,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "HoverFlyoutModel_TargetItemKey",
+                                            "module":  1,
+                                            "rva":  3220968,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailList_OnPointerMoved",
+                                            "module":  1,
+                                            "rva":  1882960,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "FlyoutFrame_UpdateFlyoutPosition",
+                                            "module":  1,
+                                            "rva":  3052268,
+                                            "kind":  "function",
+                                            "required":  true
+                                        }
+                                    ],
+                        "adjustments":  [
+
+                                        ]
+                    },
+                    {
+                        "id":  2620013102,
+                        "backend_flags":  [
+                                              "xaml"
+                                          ],
+                        "modules":  [
+                                        {
+                                            "name":  "taskbar.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{E6BFF37F-792C-E007-D441-6BBD8DDEAFDA}",
+                                            "size_of_image":  3129344,
+                                            "timestamp":  2766838074
+                                        },
+                                        {
+                                            "name":  "taskbar.view.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{4A99B7C5-BAD9-4999-9575-72CC66E11978}",
+                                            "size_of_image":  10051584,
+                                            "timestamp":  1781122501
+                                        }
+                                    ],
+                        "symbols":  [
+                                        {
+                                            "id":  "TaskGroup_GetNumItems",
+                                            "module":  0,
+                                            "rva":  369920,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_GetTBGroupFromGroup",
+                                            "module":  0,
+                                            "rva":  128140,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_GetGroupType",
+                                            "module":  0,
+                                            "rva":  128528,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_IndexOfTaskItem",
+                                            "module":  0,
+                                            "rva":  242784,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_TaskInclusionChanged",
+                                            "module":  0,
+                                            "rva":  370144,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemFilter_IsTaskAllowed",
+                                            "module":  0,
+                                            "rva":  370336,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnail_ConstructorV2",
+                                            "module":  0,
+                                            "rva":  1411008,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskGroup_Thumbnails",
+                                            "module":  0,
+                                            "rva":  715800,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_Size",
+                                            "module":  0,
+                                            "rva":  756568,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_GetAt",
+                                            "module":  0,
+                                            "rva":  776828,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_HandleExtendedUIClick",
+                                            "module":  0,
+                                            "rva":  1348224,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "HoverFlyoutModel_TargetItemKey",
+                                            "module":  1,
+                                            "rva":  3220968,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailList_OnPointerMoved",
+                                            "module":  1,
+                                            "rva":  1882960,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "FlyoutFrame_UpdateFlyoutPosition",
+                                            "module":  1,
+                                            "rva":  3052268,
+                                            "kind":  "function",
+                                            "required":  true
+                                        }
+                                    ],
+                        "adjustments":  [
+
+                                        ]
+                    },
+                    {
+                        "id":  2620013103,
+                        "backend_flags":  [
+                                              "xaml"
+                                          ],
+                        "modules":  [
+                                        {
+                                            "name":  "taskbar.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{243AD9CB-E63D-5DB5-0527-416E3C678D47}",
+                                            "size_of_image":  3153920,
+                                            "timestamp":  1620053708
+                                        },
+                                        {
+                                            "name":  "taskbar.view.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{9F389A85-8FC9-409A-BBC5-18000E863490}",
+                                            "size_of_image":  10006528,
+                                            "timestamp":  1782371729
+                                        }
+                                    ],
+                        "symbols":  [
+                                        {
+                                            "id":  "TaskGroup_GetNumItems",
+                                            "module":  0,
+                                            "rva":  369888,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_GetTBGroupFromGroup",
+                                            "module":  0,
+                                            "rva":  128444,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_GetGroupType",
+                                            "module":  0,
+                                            "rva":  128832,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_IndexOfTaskItem",
+                                            "module":  0,
+                                            "rva":  242944,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_TaskInclusionChanged",
+                                            "module":  0,
+                                            "rva":  370112,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemFilter_IsTaskAllowed",
+                                            "module":  0,
+                                            "rva":  370304,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnail_ConstructorV2",
+                                            "module":  0,
+                                            "rva":  1428240,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskGroup_Thumbnails",
+                                            "module":  0,
+                                            "rva":  712688,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_Size",
+                                            "module":  0,
+                                            "rva":  758376,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_GetAt",
+                                            "module":  0,
+                                            "rva":  778636,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_HandleExtendedUIClick",
+                                            "module":  0,
+                                            "rva":  1367088,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "HoverFlyoutModel_TargetItemKey",
+                                            "module":  1,
+                                            "rva":  3204792,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailList_OnPointerMoved",
+                                            "module":  1,
+                                            "rva":  1914000,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "FlyoutFrame_UpdateFlyoutPosition",
+                                            "module":  1,
+                                            "rva":  3045452,
+                                            "kind":  "function",
+                                            "required":  true
+                                        }
+                                    ],
+                        "adjustments":  [
+
+                                        ]
+                    },
+                    {
+                        "id":  2620013104,
+                        "backend_flags":  [
+                                              "xaml"
+                                          ],
+                        "modules":  [
+                                        {
+                                            "name":  "taskbar.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{6C3AA949-6CD5-913C-BF5A-E8A6F3B506AA}",
+                                            "size_of_image":  3153920,
+                                            "timestamp":  2941576477
+                                        },
+                                        {
+                                            "name":  "taskbar.view.dll",
+                                            "pdb_age":  1,
+                                            "pdb_guid":  "{9F389A85-8FC9-409A-BBC5-18000E863490}",
+                                            "size_of_image":  10006528,
+                                            "timestamp":  1782371729
+                                        }
+                                    ],
+                        "symbols":  [
+                                        {
+                                            "id":  "TaskGroup_GetNumItems",
+                                            "module":  0,
+                                            "rva":  369888,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_GetTBGroupFromGroup",
+                                            "module":  0,
+                                            "rva":  128444,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_GetGroupType",
+                                            "module":  0,
+                                            "rva":  128832,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskBtnGroup_IndexOfTaskItem",
+                                            "module":  0,
+                                            "rva":  242944,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_TaskInclusionChanged",
+                                            "module":  0,
+                                            "rva":  370112,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemFilter_IsTaskAllowed",
+                                            "module":  0,
+                                            "rva":  370304,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnail_ConstructorV2",
+                                            "module":  0,
+                                            "rva":  1428240,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskGroup_Thumbnails",
+                                            "module":  0,
+                                            "rva":  712688,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_Size",
+                                            "module":  0,
+                                            "rva":  758376,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailVector_GetAt",
+                                            "module":  0,
+                                            "rva":  778636,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskListWnd_HandleExtendedUIClick",
+                                            "module":  0,
+                                            "rva":  1367088,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "HoverFlyoutModel_TargetItemKey",
+                                            "module":  1,
+                                            "rva":  3204792,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "TaskItemThumbnailList_OnPointerMoved",
+                                            "module":  1,
+                                            "rva":  1914000,
+                                            "kind":  "function",
+                                            "required":  true
+                                        },
+                                        {
+                                            "id":  "FlyoutFrame_UpdateFlyoutPosition",
+                                            "module":  1,
+                                            "rva":  3045452,
+                                            "kind":  "function",
+                                            "required":  true
+                                        }
+                                    ],
+                        "adjustments":  [
+
+                                        ]
+                    }
+                ]
+}
