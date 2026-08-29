@@ -297,6 +297,16 @@ Sequence $newSequence retains legacy records and adds exact record $newRecordId.
 "@
 [System.IO.File]::WriteAllText($docPath, $docContent + "`n", [System.Text.UTF8Encoding]::new($false))
 
+# Update README.md qualification link
+$readmePath = Join-Path $ScriptDir "README.md"
+if (Test-Path $readmePath) {
+    $readmeContent = [System.IO.File]::ReadAllText($readmePath)
+    $readmePattern = "Records `([0-9,\s`]+)` are qualified;\s+see the\r?\n\[current qualification record\]\([^\)]+\)\."
+    $readmeReplacement = "Records `$1, and `$newRecordId` are qualified; see the`r`n[current qualification record](docs/qualification/$newRecordId.md)."
+    $readmeUpdated = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, $readmePattern, $readmeReplacement)
+    [System.IO.File]::WriteAllText($readmePath, $readmeUpdated, [System.Text.UTF8Encoding]::new($false))
+}
+
 if (-not $SkipPush) {
     try {
         git -C $ScriptDir add README.md compat/qualified/ docs/qualification/
