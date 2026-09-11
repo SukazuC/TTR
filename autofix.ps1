@@ -100,13 +100,18 @@ function Download-Pdb($modInfo, $targetDir) {
     $age = $modInfo.codeview.pdb_age
     $pdbName = $modInfo.codeview.pdb_path
     $url = "https://msdl.microsoft.com/download/symbols/$pdbName/$guidClean$age/$pdbName"
-    $dest = Join-Path $targetDir $pdbName
+    $destName = [System.IO.Path]::GetFileNameWithoutExtension($pdbName) + "-$guidClean$age.pdb"
+    $dest = Join-Path $targetDir $destName
     
     if (-not (Test-Path $dest)) {
         Write-Host "  -> Downloading $pdbName from $url ..." -ForegroundColor Gray
-        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+        } catch {
+            throw "Failed to download PDB for $($modInfo.name) ($pdbName) from Microsoft symbol server: $_`nMicrosoft may not have published public symbols for this build yet. If you recently updated Windows, please wait a few hours and run autofix again."
+        }
     } else {
-        Write-Host "  -> Using cached $pdbName" -ForegroundColor Gray
+        Write-Host "  -> Using cached $destName" -ForegroundColor Gray
     }
     return $dest
 }
@@ -136,7 +141,7 @@ if (-not (Test-Path $FeedRecordsDir)) {
 }
 
 # Fetch latest record file
-$recordFiles = Get-ChildItem -Path $FeedRecordsDir -Filter "*.json" | Sort-Object Name
+$recordFiles = Get-ChildItem -Path $FeedRecordsDir -Filter "*.json" | Sort-Object { [int64]$_.BaseName }
 $latestRecordFile = $recordFiles[-1]
 $latestData = Get-Content $latestRecordFile.FullName | ConvertFrom-Json
 
@@ -264,7 +269,7 @@ $docPath = Join-Path $ScriptDir "docs\qualification\$newRecordId.md"
 $osVer = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion
 $osBuild = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
 $osUbr = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").UBR
-$today = (Get-Date).ToString("MMMM dd, yyyy")
+$today = (Get-Date).ToString("MMMM dd, yyyy", [System.Globalization.CultureInfo]::InvariantCulture)
 
 $docContent = @"
 # Qualification record $newRecordId
@@ -278,8 +283,8 @@ identities match exactly:
 
 | Module | Path | Timestamp | SizeOfImage | PDB GUID | Age | Module SHA-256 |
 | --- | --- | ---: | ---: | --- | ---: | --- |
-| `taskbar.dll` | `C:\Windows\System32\Taskbar.dll` | $($modTaskbar.timestamp) | $($modTaskbar.size_of_image) | `$($modTaskbar.codeview.pdb_guid)` | $($modTaskbar.codeview.pdb_age) | `$($modTaskbar.sha256.ToUpper())` |
-| `Taskbar.View.dll` | `$TaskbarViewDll` | $($modTaskbarView.timestamp) | $($modTaskbarView.size_of_image) | `$($modTaskbarView.codeview.pdb_guid)` | $($modTaskbarView.codeview.pdb_age) | `$($modTaskbarView.sha256.ToUpper())` |
+| ``taskbar.dll`` | ``C:\Windows\System32\Taskbar.dll`` | $($modTaskbar.timestamp) | $($modTaskbar.size_of_image) | ``$($modTaskbar.codeview.pdb_guid)`` | $($modTaskbar.codeview.pdb_age) | ``$($modTaskbar.sha256.ToUpper())`` |
+| ``Taskbar.View.dll`` | ``$TaskbarViewDll`` | $($modTaskbarView.timestamp) | $($modTaskbarView.size_of_image) | ``$($modTaskbarView.codeview.pdb_guid)`` | $($modTaskbarView.codeview.pdb_age) | ``$($modTaskbarView.sha256.ToUpper())`` |
 
 Both Microsoft PDBs matched their DLL CodeView GUID and age exactly before DIA enumeration. All 14
 required XAML symbols resolved uniquely and passed section-permission validation.
@@ -290,10 +295,10 @@ Sequence $newSequence retains legacy records and adds exact record $newRecordId.
 
 | File | SHA-256 |
 | --- | --- |
-| `records/$newRecordId.json` | `$((Get-FileHash -Algorithm SHA256 $NewRecordJsonPath).Hash)` |
-| `compat.bin` | `$((Get-FileHash -Algorithm SHA256 $CompatBinPath).Hash)` |
-| `compat.sig` | `$((Get-FileHash -Algorithm SHA256 $CompatSigPath).Hash)` |
-| `manifest-public-key.bin` | `$((Get-FileHash -Algorithm SHA256 $PublicKey).Hash)` |
+| ``records/$newRecordId.json`` | ``$((Get-FileHash -Algorithm SHA256 $NewRecordJsonPath).Hash)`` |
+| ``compat.bin`` | ``$((Get-FileHash -Algorithm SHA256 $CompatBinPath).Hash)`` |
+| ``compat.sig`` | ``$((Get-FileHash -Algorithm SHA256 $CompatSigPath).Hash)`` |
+| ``manifest-public-key.bin`` | ``$((Get-FileHash -Algorithm SHA256 $PublicKey).Hash)`` |
 "@
 [System.IO.File]::WriteAllText($docPath, $docContent + "`n", [System.Text.UTF8Encoding]::new($false))
 
@@ -301,10 +306,15 @@ Sequence $newSequence retains legacy records and adds exact record $newRecordId.
 $readmePath = Join-Path $ScriptDir "README.md"
 if (Test-Path $readmePath) {
     $readmeContent = [System.IO.File]::ReadAllText($readmePath)
-    $readmePattern = "Records `([0-9,\s`]+)` are qualified;\s+see the\r?\n\[current qualification record\]\([^\)]+\)\."
-    $readmeReplacement = "Records `$1, and `$newRecordId` are qualified; see the`r`n[current qualification record](docs/qualification/$newRecordId.md)."
-    $readmeUpdated = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, $readmePattern, $readmeReplacement)
-    [System.IO.File]::WriteAllText($readmePath, $readmeUpdated, [System.Text.UTF8Encoding]::new($false))
+    $readmePattern = "(?s)Records (?<records>.+?) are qualified;\s+see the\r?\n\[current qualification record\]\([^\)]+\)\."
+    $match = [System.Text.RegularExpressions.Regex]::Match($readmeContent, $readmePattern)
+    if ($match.Success) {
+        $existingRecords = $match.Groups["records"].Value
+        $cleanRecords = ($existingRecords -replace ",?\s+and\s+", ", ").Trim()
+        $replacement = "Records $cleanRecords, and ``$newRecordId`` are qualified; see the`r`n[current qualification record](docs/qualification/$newRecordId.md)."
+        $readmeUpdated = $readmeContent.Substring(0, $match.Index) + $replacement + $readmeContent.Substring($match.Index + $match.Length)
+        [System.IO.File]::WriteAllText($readmePath, $readmeUpdated, [System.Text.UTF8Encoding]::new($false))
+    }
 }
 
 if (-not $SkipPush) {
